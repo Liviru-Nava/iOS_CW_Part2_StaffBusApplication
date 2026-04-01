@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct LoginView: View {
-    @StateObject private var viewModel = LoginViewModel()
+    @StateObject private var loginViewModel = LoginViewModel()
     @State private var navigateToOTP = false
 
     var body: some View {
@@ -37,12 +37,12 @@ struct LoginView: View {
             }
             .navigationBarHidden(true)
             .navigationDestination(isPresented: $navigateToOTP){
-                //navigate to OTP Page need to implement
+                OTPVerificationView(phone: loginViewModel.phoneNumber, onSuccess: {})
             }
-            .sheet(isPresented: $viewModel.showTermsSheet) {
+            .sheet(isPresented: $loginViewModel.showTermsSheet) {
                 TermsSheetView()
             }
-            .onChange(of: viewModel.loginState) { _, newState in
+            .onChange(of: loginViewModel.loginState) { _, newState in
                 if case .otpSent = newState {
                     navigateToOTP = true
                 }
@@ -79,15 +79,15 @@ struct LoginView: View {
 
             HStack(spacing: 0) {
 //                Menu {
-//                    Button("+94  Sri Lanka") { viewModel.selectedCountryCode = "+94" }
-//                    Button("+44  United Kingdom") { viewModel.selectedCountryCode = "+44" }
-//                    Button("+1  United States") { viewModel.selectedCountryCode = "+1" }
-//                    Button("+91  India") { viewModel.selectedCountryCode = "+91" }
+//                    Button("+94  Sri Lanka") { loginViewModel.selectedCountryCode = "+94" }
+//                    Button("+44  United Kingdom") { loginViewModel.selectedCountryCode = "+44" }
+//                    Button("+1  United States") { loginViewModel.selectedCountryCode = "+1" }
+//                    Button("+91  India") { loginViewModel.selectedCountryCode = "+91" }
 //                } label: {
 //                    HStack(spacing: 6) {
 //                        Text("🇱🇰")
 //                            .font(.system(size: 18))
-//                        Text(viewModel.selectedCountryCode)
+//                        Text(loginViewModel.selectedCountryCode)
 //                            .font(.system(size: 15, weight: .medium))
 //                            .foregroundColor(.textPrimary)
 //                        Image(systemName: "chevron.down")
@@ -110,7 +110,7 @@ struct LoginView: View {
                     .fill(Color.divider)
                     .frame(width: 1, height: 26)
 
-                TextField("7X XXX XXXX", text: $viewModel.phoneNumber)
+                TextField("7X XXX XXXX", text: $loginViewModel.phoneNumber)
                     .keyboardType(.numberPad)
                     .font(.system(size: 16))
                     .foregroundColor(.textPrimary)
@@ -123,14 +123,14 @@ struct LoginView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(
-                        viewModel.phoneNumber.isEmpty
+                        loginViewModel.phoneNumber.isEmpty
                             ? Color.clear
-                            : (viewModel.isPhoneNumberValid ? Color.brandSecondary.opacity(0.5) : Color.statusDanger.opacity(0.5)),
+                            : (loginViewModel.isPhoneNumberValid ? Color.brandSecondary.opacity(0.5) : Color.statusDanger.opacity(0.5)),
                         lineWidth: 1.5
                     )
             )
 
-            if !viewModel.phoneNumber.isEmpty && !viewModel.isPhoneNumberValid {
+            if !loginViewModel.phoneNumber.isEmpty && !loginViewModel.isPhoneNumberValid {
                 Text("Please enter a valid phone number")
                     .font(.system(size: 12))
                     .foregroundColor(.statusDanger)
@@ -141,17 +141,17 @@ struct LoginView: View {
     private var termsRow: some View {
         HStack(alignment: .top, spacing: 10) {
             Button {
-                viewModel.termsAccepted.toggle()
+                loginViewModel.termsAccepted.toggle()
             } label: {
                 ZStack {
                     RoundedRectangle(cornerRadius: 5)
-                        .fill(viewModel.termsAccepted ? Color.brandSecondary : Color.surfaceBackground)
+                        .fill(loginViewModel.termsAccepted ? Color.brandSecondary : Color.surfaceBackground)
                         .frame(width: 20, height: 20)
                         .overlay(
                             RoundedRectangle(cornerRadius: 5)
-                                .stroke(viewModel.termsAccepted ? Color.brandSecondary : Color.divider, lineWidth: 1.5)
+                                .stroke(loginViewModel.termsAccepted ? Color.brandSecondary : Color.divider, lineWidth: 1.5)
                         )
-                    if viewModel.termsAccepted {
+                    if loginViewModel.termsAccepted {
                         Image(systemName: "checkmark")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.white)
@@ -164,25 +164,25 @@ struct LoginView: View {
                 Text("By continuing, you agree to our ")
                     .foregroundColor(.textSecondary)
                 + Text("Terms & Conditions")
-                    .foregroundColor(.brandSecondary)
+                    .foregroundColor(.brandAccent)
                     .underline()
                 + Text(" and ")
                     .foregroundColor(.textSecondary)
                 + Text("Privacy Policy")
-                    .foregroundColor(.brandSecondary)
+                    .foregroundColor(.brandAccent)
                     .underline()
             }
             .font(.system(size: 12, weight: .regular))
-            .onTapGesture { viewModel.showTermsSheet = true }
+            .onTapGesture { loginViewModel.showTermsSheet = true }
         }
     }
 
     private var sendOTPButton: some View {
         Button {
-            Task { await viewModel.sendOTP() }
+            Task { await loginViewModel.sendOTP() }
         } label: {
             ZStack {
-                if case .loading = viewModel.loginState {
+                if case .loading = loginViewModel.loginState {
                     ProgressView().tint(.white)
                 } else {
                     Text("Send OTP")
@@ -193,14 +193,14 @@ struct LoginView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 54)
             .background(
-                viewModel.canContinue
+                loginViewModel.canContinue
                     ? Color.brandSecondary
                     : Color.statusInactive.opacity(0.35)
             )
             .clipShape(RoundedRectangle(cornerRadius: 14))
         }
-        .disabled(!viewModel.canContinue || {
-            if case .loading = viewModel.loginState { return true }
+        .disabled(!loginViewModel.canContinue || {
+            if case .loading = loginViewModel.loginState { return true }
             return false
         }())
         .padding(.top, 4)
