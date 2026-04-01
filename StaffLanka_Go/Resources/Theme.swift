@@ -9,10 +9,14 @@ import SwiftUI
 import UIKit
 
 extension Color {
-    // Brand — deep navy family
     static let brandPrimary    = Color(hex: "#0D1B3E")
     static let brandSecondary  = Color(hex: "#1A3A6B")
-    static let brandAccent     = Color(hex: "#3B82C4")
+
+    static let brandAccent = Color(UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(red: 0.55, green: 0.76, blue: 1.00, alpha: 1)
+            : UIColor(red: 0.07, green: 0.28, blue: 0.58, alpha: 1)
+    })
 
     static let appBackground = Color(UIColor { trait in
         trait.userInterfaceStyle == .dark
@@ -36,7 +40,11 @@ extension Color {
     static let statusWarning  = Color(hex: "#FFB800")
     static let statusInactive = Color(hex: "#8E8E93")
     static let statusDanger   = Color(hex: "#FF453A")
-    static let statusInfo     = Color(hex: "#3B82C4")
+    static let statusInfo     = Color(UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(red: 0.55, green: 0.76, blue: 1.00, alpha: 1)
+            : UIColor(red: 0.07, green: 0.28, blue: 0.58, alpha: 1)
+    })
 
     static let textPrimary = Color(UIColor { trait in
         trait.userInterfaceStyle == .dark
@@ -95,7 +103,6 @@ extension LinearGradient {
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
-    // Used for the hero icon badge
     static let brandAccentGlow = LinearGradient(
         colors: [Color(hex: "#1A3A6B"), Color(hex: "#3B82C4")],
         startPoint: .topLeading,
