@@ -9,9 +9,15 @@ import SwiftUI
 import UIKit
 
 extension Color {
-    static let brandPrimary    = Color(hex: "#0D1B3E")
+//    static let brandPrimary    = Color(hex: "#0D1B3E")
     static let brandSecondary  = Color(hex: "#1A3A6B")
 
+    static let brandPrimary = Color(UIColor { trait in
+        trait.userInterfaceStyle == .dark
+        ? UIColor(Color(hex: "#0D1B3E"))
+        : UIColor(Color.white)
+    })
+    
     static let brandAccent = Color(UIColor { trait in
         trait.userInterfaceStyle == .dark
             ? UIColor(red: 0.55, green: 0.76, blue: 1.00, alpha: 1)
