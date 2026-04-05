@@ -10,6 +10,7 @@ import SwiftUI
 struct PassengerNavigationBar: View {
 
     @State private var selectedTab: Int = 0
+    @StateObject private var profileViewModel = PassengerProfileViewModel()
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -38,9 +39,7 @@ struct PassengerNavigationBar: View {
             .tag(2)
 
             NavigationStack {
-                placeholderView(title: "Profile", icon: "person")
-                    .navigationTitle("Profile")
-                    .navigationBarTitleDisplayMode(.inline)
+                PassengerProfileView(profileViewModel: profileViewModel)
             }
             .tabItem {
                 Label("Profile", systemImage: selectedTab == 3 ? "person.fill" : "person")
@@ -48,23 +47,6 @@ struct PassengerNavigationBar: View {
             .tag(3)
         }
         .tint(Color.brandAccent)
-    }
-
-    private func placeholderView(title: String, icon: String) -> some View {
-        ZStack {
-            Color.appBackground.ignoresSafeArea()
-            VStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 36))
-                    .foregroundStyle(Color.textTertiary)
-                Text(title)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Color.textPrimary)
-                Text("Coming soon")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.textSecondary)
-            }
-        }
     }
 }
 

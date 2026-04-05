@@ -92,7 +92,7 @@ struct PassengerCostTrackingView: View {
                                 Text("Pay for This Month")
                                     .font(.system(size: 15, weight: .semibold))
                             }
-                            .foregroundColor(Color(hex: "#0D1B3E"))
+                            .foregroundColor(Color.brandPrimary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                             .background(Color.white)
