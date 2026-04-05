@@ -46,11 +46,18 @@ extension Color {
             : UIColor.tertiarySystemGroupedBackground
     })
 
+    static let inputBackground = Color(UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(red: 0.07, green: 0.12, blue: 0.24, alpha: 1)
+            : UIColor.secondarySystemGroupedBackground
+    })
+
     static let statusActive   = Color(hex: "#00C48C")
     static let statusWarning  = Color(hex: "#FFB800")
     static let statusInactive = Color(hex: "#8E8E93")
     static let statusDanger   = Color(hex: "#FF453A")
-    static let statusInfo     = Color(UIColor { trait in
+
+    static let statusInfo = Color(UIColor { trait in
         trait.userInterfaceStyle == .dark
             ? UIColor(red: 0.55, green: 0.76, blue: 1.00, alpha: 1)
             : UIColor(red: 0.07, green: 0.28, blue: 0.58, alpha: 1)
@@ -76,18 +83,6 @@ extension Color {
 
     static let textOnBrand = Color.white
 
-    static let textOnLight = Color(UIColor { trait in
-        trait.userInterfaceStyle == .dark
-            ? UIColor.white
-            : UIColor(red: 0.05, green: 0.11, blue: 0.24, alpha: 1)
-    })
-
-    static let inputBackground = Color(UIColor { trait in
-        trait.userInterfaceStyle == .dark
-            ? UIColor(red: 0.07, green: 0.12, blue: 0.24, alpha: 1)
-            : UIColor.secondarySystemGroupedBackground
-    })
-
     static let divider = Color(UIColor { trait in
         trait.userInterfaceStyle == .dark
             ? UIColor(white: 1, alpha: 0.10)
@@ -110,17 +105,17 @@ extension Color {
 
 extension LinearGradient {
     static let brand = LinearGradient(
-        colors: [Color(hex: "#0D1B3E"), Color(hex: "#1A3A6B")],
+        colors: [Color.brandPrimary, Color.brandSecondary],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
     static let brandSubtle = LinearGradient(
-        colors: [Color(hex: "#0D1B3E").opacity(0.12), Color(hex: "#1A3A6B").opacity(0.06)],
+        colors: [Color.brandPrimary.opacity(0.12), Color.brandSecondary.opacity(0.06)],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
     static let brandAccentGlow = LinearGradient(
-        colors: [Color(hex: "#1A3A6B"), Color(hex: "#3B82C4")],
+        colors: [Color.brandSecondary, Color.brandAccent],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )

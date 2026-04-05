@@ -37,7 +37,9 @@ struct LoginView: View {
             }
             .navigationBarHidden(true)
             .navigationDestination(isPresented: $navigateToOTP){
-                OTPVerificationView(phone: loginViewModel.phoneNumber, onSuccess: {})
+                OTPVerificationView(phone: loginViewModel.phoneNumber, onSuccess: {
+                    AuthManager.shared.signIn()
+                })
             }
             .sheet(isPresented: $loginViewModel.showTermsSheet) {
                 TermsSheetView()
