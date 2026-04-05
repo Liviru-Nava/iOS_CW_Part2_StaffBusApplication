@@ -9,15 +9,19 @@ import SwiftUI
 import UIKit
 
 extension Color {
-//    static let brandPrimary    = Color(hex: "#0D1B3E")
-    static let brandSecondary  = Color(hex: "#1A3A6B")
 
     static let brandPrimary = Color(UIColor { trait in
         trait.userInterfaceStyle == .dark
-        ? UIColor(Color(hex: "#0D1B3E"))
-        : UIColor(Color.white)
+            ? UIColor(red: 0.05, green: 0.11, blue: 0.24, alpha: 1)
+            : UIColor(red: 0.05, green: 0.11, blue: 0.24, alpha: 1)
     })
-    
+
+    static let brandSecondary = Color(UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(red: 0.20, green: 0.42, blue: 0.75, alpha: 1)
+            : UIColor(red: 0.07, green: 0.23, blue: 0.50, alpha: 1)
+    })
+
     static let brandAccent = Color(UIColor { trait in
         trait.userInterfaceStyle == .dark
             ? UIColor(red: 0.55, green: 0.76, blue: 1.00, alpha: 1)
@@ -27,19 +31,19 @@ extension Color {
     static let appBackground = Color(UIColor { trait in
         trait.userInterfaceStyle == .dark
             ? UIColor(red: 0.04, green: 0.07, blue: 0.16, alpha: 1)
-            : UIColor.systemBackground
+            : UIColor.systemGroupedBackground
     })
 
     static let cardBackground = Color(UIColor { trait in
         trait.userInterfaceStyle == .dark
             ? UIColor(red: 0.07, green: 0.12, blue: 0.24, alpha: 1)
-            : UIColor.secondarySystemBackground
+            : UIColor.secondarySystemGroupedBackground
     })
 
     static let surfaceBackground = Color(UIColor { trait in
         trait.userInterfaceStyle == .dark
             ? UIColor(red: 0.10, green: 0.16, blue: 0.30, alpha: 1)
-            : UIColor.tertiarySystemBackground
+            : UIColor.tertiarySystemGroupedBackground
     })
 
     static let statusActive   = Color(hex: "#00C48C")
@@ -66,16 +70,22 @@ extension Color {
 
     static let textTertiary = Color(UIColor { trait in
         trait.userInterfaceStyle == .dark
-            ? UIColor(white: 1, alpha: 0.4)
+            ? UIColor(white: 1, alpha: 0.40)
             : UIColor.tertiaryLabel
     })
 
     static let textOnBrand = Color.white
 
+    static let textOnLight = Color(UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor.white
+            : UIColor(red: 0.05, green: 0.11, blue: 0.24, alpha: 1)
+    })
+
     static let inputBackground = Color(UIColor { trait in
         trait.userInterfaceStyle == .dark
             ? UIColor(red: 0.07, green: 0.12, blue: 0.24, alpha: 1)
-            : UIColor.secondarySystemBackground
+            : UIColor.secondarySystemGroupedBackground
     })
 
     static let divider = Color(UIColor { trait in
@@ -100,7 +110,7 @@ extension Color {
 
 extension LinearGradient {
     static let brand = LinearGradient(
-        colors: [.brandPrimary, .brandSecondary],
+        colors: [Color(hex: "#0D1B3E"), Color(hex: "#1A3A6B")],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
