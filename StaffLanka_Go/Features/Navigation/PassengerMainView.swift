@@ -22,9 +22,7 @@ struct PassengerNavigationBar: View {
             .tag(0)
 
             NavigationStack {
-                placeholderView(title: "History", icon: "clock")
-                    .navigationTitle("Trip History")
-                    .navigationBarTitleDisplayMode(.inline)
+                PassengerTripHistoryView()
             }
             .tabItem {
                 Label("History", systemImage: selectedTab == 1 ? "clock.fill" : "clock")
