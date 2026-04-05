@@ -29,7 +29,7 @@ struct OTPVerificationView: View {
     var body: some View {
         ZStack {
             Color.appBackground.ignoresSafeArea()
-
+            
             VStack(spacing: 32) {
                 headerSection
                 otpArea
@@ -41,14 +41,19 @@ struct OTPVerificationView: View {
             }
         }
         .navigationBarHidden(false)
-        .onAppear {
-            focusedIndex = 0
+        .fullScreenCover(isPresented: Binding(get: {otpViewModel.state == .success}, set: {_ in })){
+            PassengerNavigationBar()
+        }
+        .onChange(of: otpViewModel.state) { newState in
+            if newState == .success {
+                onSuccess()
+            }
         }
         .onAppear {
             focusedIndex = 0
             otpViewModel.startCountdown()
         }
-        .onChange(of: enteredOTP) { _, _ in
+        .onChange(of: enteredOTP) {
             Task {
                 await otpViewModel.handleAutoSubmit()
             }

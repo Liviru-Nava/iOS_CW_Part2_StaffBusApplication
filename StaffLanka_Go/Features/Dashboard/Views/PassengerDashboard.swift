@@ -10,19 +10,25 @@ import SwiftUI
 struct PassengerDashboard: View {
 
     @StateObject private var passengerViewModel = PassengerDashboardViewModel()
+    @State private var showRouteSearch = false
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 0) {
-                headerSection
-                contentSection
-                    .padding(.horizontal, 20)
-                    .padding(.top, 24)
-                    .padding(.bottom, 48)
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    headerSection
+                    contentSection
+                        .padding(.horizontal, 20)
+                        .padding(.top, 24)
+                        .padding(.bottom, 48)
+                }
+            }
+            .background(Color.appBackground.ignoresSafeArea())
+            .ignoresSafeArea(edges: .top)
+            .navigationDestination(isPresented: $showRouteSearch) {
+                RouteSearchView()
             }
         }
-        .background(Color.appBackground.ignoresSafeArea())
-        .ignoresSafeArea(edges: .top)
     }
 
     private var headerSection: some View {
@@ -38,15 +44,15 @@ struct PassengerDashboard: View {
                 }
 
                 Spacer()
-
+                
                 ZStack(alignment: .topTrailing) {
                     Button {
                     } label: {
                         Image(systemName: "bell.fill")
                             .font(.system(size: 17, weight: .medium))
-                            .foregroundStyle(Color.textPrimary)
+                            .foregroundStyle(Color.brandAccent)
                             .frame(width: 44, height: 44)
-                            .background(.ultraThinMaterial)
+                            .background(Color.brandAccent.opacity(0.13))
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
@@ -67,7 +73,7 @@ struct PassengerDashboard: View {
                 UISegmentedControl.appearance().selectedSegmentTintColor = UIColor.white
                 UISegmentedControl.appearance().backgroundColor = UIColor(white: 1, alpha: 0.12)
                 UISegmentedControl.appearance().setTitleTextAttributes(
-                    [.foregroundColor: UIColor(Color.brandPrimary)],
+                    [.foregroundColor: UIColor(Color.brandSecondary)],
                     for: .selected
                 )
                 UISegmentedControl.appearance().setTitleTextAttributes(
@@ -86,8 +92,8 @@ struct PassengerDashboard: View {
         VStack(alignment: .leading, spacing: 22) {
             if !passengerViewModel.activeService {
                 noServiceCard
+                registerRouteCard
             }
-            findRouteSection
         }
     }
 
@@ -102,7 +108,7 @@ struct PassengerDashboard: View {
                     .foregroundStyle(Color.brandAccent)
             }
 
-            VStack(spacing: 5) {
+            VStack(spacing: 4) {
                 Text(passengerViewModel.noServiceTitle)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color.textPrimary)
@@ -118,102 +124,94 @@ struct PassengerDashboard: View {
         .padding(.vertical, 30)
         .padding(.horizontal, 20)
         .background(Color.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 
-    private var findRouteSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(passengerViewModel.findRouteTitle)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(Color.textPrimary)
+    private var registerRouteCard: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(Color.brandAccent.opacity(0.13))
+                        .frame(width: 52, height: 52)
+                    Image(systemName: "map.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(Color.brandAccent)
+                }
 
-            VStack(spacing: 0) {
-                locationRow(
-                    icon: "location.fill",
-                    iconColor: Color.brandAccent,
-                    label: "PICKUP LOCATION",
-                    placeholder: "Select Starting Point",
-                    binding: $passengerViewModel.pickupLocation
-                )
-
-                Rectangle()
-                    .fill(Color.divider)
-                    .frame(height: 0.5)
-                    .padding(.horizontal,12)
-
-                locationRow(
-                    icon: "mappin.circle.fill",
-                    iconColor: Color.brandAccent,
-                    label: "DROP-OFF LOCATION",
-                    placeholder: "Select Destination",
-                    binding: $passengerViewModel.dropoffLocation
-                )
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Find Your Route")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(Color.textPrimary)
+                    Text("Browse available routes and register for a service that fits your schedule.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.textSecondary)
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .background(Color.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+
+            Divider()
+                .background(Color.divider)
+
+            VStack(spacing: 12) {
+                stepRow(number: "1", text: "Search for routes near your pickup point")
+                stepRow(number: "2", text: "Choose a route that matches your commute")
+                stepRow(number: "3", text: "Submit a registration request to the driver")
+            }
 
             Button {
-                passengerViewModel.searchRoutes()
+                showRouteSearch = true
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Browse Routes")
                         .font(.system(size: 15, weight: .semibold))
-                    Text("Search Routes")
-                        .font(.system(size: 16, weight: .semibold))
                 }
-                .foregroundStyle(Color.white)
+                .foregroundStyle(Color.brandPrimary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    (passengerViewModel.pickupLocation.isEmpty || passengerViewModel.dropoffLocation.isEmpty)
-                    ?Color.statusInactive.opacity(0.35)
-                    : Color.brandPrimary
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .padding(.vertical, 14)
+                .background(Color.brandAccent)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
-            .disabled(passengerViewModel.pickupLocation.isEmpty || passengerViewModel.dropoffLocation.isEmpty)
+            .buttonStyle(.plain)
         }
+        .padding(20)
+        .background(Color.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .strokeBorder(Color.brandAccent.opacity(0.18), lineWidth: 1)
+        )
     }
 
-    private func locationRow(
-        icon: String,
-        iconColor: Color,
-        label: String,
-        placeholder: String,
-        binding: Binding<String>
-    ) -> some View {
-        HStack(spacing: 14) {
+    private func stepRow(number: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(iconColor.opacity(0.14))
-                    .frame(width: 38, height: 38)
-                Image(systemName: icon)
-                    .font(.system(size: 17))
-                    .foregroundStyle(iconColor)
+                Circle()
+                    .fill(Color.brandAccent.opacity(0.13))
+                    .frame(width: 26, height: 26)
+                Text(number)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color.brandAccent)
             }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(label)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color.textTertiary)
-
-                Text(binding.wrappedValue.isEmpty ? placeholder : binding.wrappedValue)
-                    .font(.system(size: 15))
-                    .foregroundStyle(binding.wrappedValue.isEmpty ? Color.textSecondary : Color.textPrimary)
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color.textTertiary)
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.textSecondary)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 15)
     }
 }
 
-#Preview {
+#Preview("Dark Mode") {
     PassengerDashboard()
         .preferredColorScheme(.dark)
+}
+
+#Preview("Light Mode") {
+    PassengerDashboard()
+        .preferredColorScheme(.light)
 }

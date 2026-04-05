@@ -16,8 +16,6 @@ final class PassengerDashboardViewModel: ObservableObject {
     @Published var selectedTrip: TripTab = .morning
     @Published var hasMorningService: Bool = false
     @Published var hasEveningService: Bool = false
-    @Published var pickupLocation: String = ""
-    @Published var dropoffLocation: String = ""
 
     enum TripTab {
         case morning, evening
@@ -38,18 +36,11 @@ final class PassengerDashboardViewModel: ObservableObject {
 
     var noServiceSubtitle: String {
         selectedTrip == .morning
-            ? "No active bus service registered for your morning commute"
-            : "No active bus service registered for your evening commute"
-    }
-
-    var findRouteTitle: String {
-        selectedTrip == .morning ? "Find a Morning Route" : "Find an Evening Route"
+            ? "You haven't registered for a morning route yet."
+            : "You haven't registered for an evening route yet."
     }
 
     var activeService: Bool {
         selectedTrip == .morning ? hasMorningService : hasEveningService
-    }
-
-    func searchRoutes() {
     }
 }
