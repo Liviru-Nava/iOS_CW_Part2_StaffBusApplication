@@ -37,7 +37,9 @@ struct LoginView: View {
             }
             .navigationBarHidden(true)
             .navigationDestination(isPresented: $navigateToOTP){
-                OTPVerificationView(phone: loginViewModel.phoneNumber, onSuccess: {})
+                OTPVerificationView(phone: loginViewModel.phoneNumber, onSuccess: {
+                    AuthManager.shared.signIn()
+                })
             }
             .sheet(isPresented: $loginViewModel.showTermsSheet) {
                 TermsSheetView()
@@ -54,11 +56,11 @@ struct LoginView: View {
         VStack(spacing: 16) {
             ZStack {
                 Circle()
-                    .fill(Color.surfaceBackground)
+                    .fill(Color.brandAccent.opacity(0.15))
                     .frame(width: 88, height: 88)
                 Image(systemName: "bus.fill")
                     .font(.system(size: 40, weight: .semibold))
-                    .foregroundColor(.textOnBrand)
+                    .foregroundColor(.brandAccent)
             }
 
             Text("StaffLanka Go")
@@ -228,8 +230,9 @@ struct LoginView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(Color.surfaceBackground)
+                        .fill(Color.cardBackground)
                         .frame(width: 56, height: 56)
+                        .overlay(Circle().stroke(Color.divider, lineWidth: 1.5))
                     Image(systemName: "apple.logo")
                         .font(.system(size: 22, weight: .medium))
                         .foregroundColor(.textPrimary)
@@ -240,7 +243,7 @@ struct LoginView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(Color.surfaceBackground)
+                        .fill(Color.cardBackground)
                         .frame(width: 56, height: 56)
                         .overlay(Circle().stroke(Color.divider, lineWidth: 1.5))
                     Image(systemName: "faceid")

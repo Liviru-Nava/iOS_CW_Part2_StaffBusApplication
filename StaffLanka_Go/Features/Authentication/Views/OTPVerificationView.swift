@@ -29,7 +29,7 @@ struct OTPVerificationView: View {
     var body: some View {
         ZStack {
             Color.appBackground.ignoresSafeArea()
-
+            
             VStack(spacing: 32) {
                 headerSection
                 otpArea
@@ -41,14 +41,19 @@ struct OTPVerificationView: View {
             }
         }
         .navigationBarHidden(false)
-        .onAppear {
-            focusedIndex = 0
+        .fullScreenCover(isPresented: Binding(get: {otpViewModel.state == .success}, set: {_ in })){
+            PassengerNavigationBar()
+        }
+        .onChange(of: otpViewModel.state) { newState in
+            if newState == .success {
+                onSuccess()
+            }
         }
         .onAppear {
             focusedIndex = 0
             otpViewModel.startCountdown()
         }
-        .onChange(of: enteredOTP) { _, _ in
+        .onChange(of: enteredOTP) {
             Task {
                 await otpViewModel.handleAutoSubmit()
             }
@@ -58,12 +63,12 @@ struct OTPVerificationView: View {
     private var headerSection: some View {
         VStack(spacing: 12) {
             ZStack {
-                Circle()
-                    .fill(Color.surfaceBackground)
+                RoundedRectangle(cornerRadius: 50)
+                    .fill(Color.brandAccent.opacity(0.13))
                     .frame(width: 80, height: 80)
                 Image(systemName: "message.badge.filled.fill")
-                    .font(.system(size: 36, weight: .medium))
-                    .foregroundColor(.brandAccent)
+                    .font(.system(size: 32))
+                    .foregroundStyle(Color.brandAccent)
             }
 
             Text("Verify Your Number")
