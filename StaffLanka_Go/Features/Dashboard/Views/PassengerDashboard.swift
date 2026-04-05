@@ -13,21 +13,19 @@ struct PassengerDashboard: View {
     @State private var showRouteSearch = false
 
     var body: some View {
-        NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    headerSection
-                    contentSection
-                        .padding(.horizontal, 20)
-                        .padding(.top, 24)
-                        .padding(.bottom, 48)
-                }
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 0) {
+                headerSection
+                contentSection
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
+                    .padding(.bottom, 48)
             }
-            .background(Color.appBackground.ignoresSafeArea())
-            .ignoresSafeArea(edges: .top)
-            .navigationDestination(isPresented: $showRouteSearch) {
-                RouteSearchView()
-            }
+        }
+        .background(Color.appBackground.ignoresSafeArea())
+        .ignoresSafeArea(edges: .top)
+        .navigationDestination(isPresented: $showRouteSearch) {
+            RouteSearchView()
         }
     }
 
@@ -44,7 +42,7 @@ struct PassengerDashboard: View {
                 }
 
                 Spacer()
-                
+
                 ZStack(alignment: .topTrailing) {
                     Button {
                     } label: {
@@ -207,11 +205,15 @@ struct PassengerDashboard: View {
 }
 
 #Preview("Dark Mode") {
-    PassengerDashboard()
-        .preferredColorScheme(.dark)
+    NavigationStack {
+        PassengerDashboard()
+    }
+    .preferredColorScheme(.dark)
 }
 
 #Preview("Light Mode") {
-    PassengerDashboard()
-        .preferredColorScheme(.light)
+    NavigationStack {
+        PassengerDashboard()
+    }
+    .preferredColorScheme(.light)
 }

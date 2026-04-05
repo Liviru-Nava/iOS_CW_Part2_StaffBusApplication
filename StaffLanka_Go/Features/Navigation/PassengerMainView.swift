@@ -13,29 +13,41 @@ struct PassengerNavigationBar: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            PassengerDashboard()
-                .tabItem {
-                    Label("Home", systemImage: selectedTab == 0 ? "house.fill" : "house")
-                }
-                .tag(0)
+            NavigationStack {
+                PassengerDashboard()
+            }
+            .tabItem {
+                Label("Home", systemImage: selectedTab == 0 ? "house.fill" : "house")
+            }
+            .tag(0)
 
-            placeholderView(title: "History", icon: "clock")
-                .tabItem {
-                    Label("History", systemImage: selectedTab == 1 ? "clock.fill" : "clock")
-                }
-                .tag(1)
+            NavigationStack {
+                placeholderView(title: "History", icon: "clock")
+                    .navigationTitle("Trip History")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+            .tabItem {
+                Label("History", systemImage: selectedTab == 1 ? "clock.fill" : "clock")
+            }
+            .tag(1)
 
-            placeholderView(title: "Costs", icon: "chart.bar")
-                .tabItem {
-                    Label("Costs", systemImage: selectedTab == 2 ? "chart.bar.fill" : "chart.bar")
-                }
-                .tag(2)
+            NavigationStack {
+                PassengerCostTrackingView()
+            }
+            .tabItem {
+                Label("Costs", systemImage: selectedTab == 2 ? "chart.bar.fill" : "chart.bar")
+            }
+            .tag(2)
 
-            placeholderView(title: "Profile", icon: "person")
-                .tabItem {
-                    Label("Profile", systemImage: selectedTab == 3 ? "person.fill" : "person")
-                }
-                .tag(3)
+            NavigationStack {
+                placeholderView(title: "Profile", icon: "person")
+                    .navigationTitle("Profile")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+            .tabItem {
+                Label("Profile", systemImage: selectedTab == 3 ? "person.fill" : "person")
+            }
+            .tag(3)
         }
         .tint(Color.brandAccent)
     }
