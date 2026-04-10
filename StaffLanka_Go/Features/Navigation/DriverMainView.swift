@@ -22,7 +22,7 @@ struct DriverNavigationBar: View {
             .tag(0)
 
             NavigationStack {
-                DriverEarningsComingSoonView()
+                //DriverEarningsView()
             }
             .tabItem {
                 Label("Earnings", systemImage: selectedDriverTab == 1 ? "banknote.fill" : "banknote")
@@ -30,7 +30,7 @@ struct DriverNavigationBar: View {
             .tag(1)
 
             NavigationStack {
-                DriverTripHistoryComingSoonView()
+                DriverTripHistoryView()
             }
             .tabItem {
                 Label("History", systemImage: selectedDriverTab == 2 ? "clock.fill" : "clock")
