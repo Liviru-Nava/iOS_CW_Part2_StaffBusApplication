@@ -22,7 +22,7 @@ struct DriverNavigationBar: View {
             .tag(0)
 
             NavigationStack {
-                //DriverEarningsView()
+                DriverEarningsView()
             }
             .tabItem {
                 Label("Earnings", systemImage: selectedDriverTab == 1 ? "banknote.fill" : "banknote")
@@ -49,16 +49,6 @@ struct DriverNavigationBar: View {
     }
 }
 
-struct DriverEarningsComingSoonView: View {
-    var body: some View {
-        DriverComingSoonView(
-            pageTitle: "Earnings",
-            featureIconName: "banknote.fill",
-            featureHeadline: "Earnings Overview",
-            featureDescription: "Track your daily, weekly, and monthly earnings from completed trips. Detailed breakdowns and payout history will be available here soon."
-        )
-    }
-}
 
 struct DriverTripHistoryComingSoonView: View {
     var body: some View {
