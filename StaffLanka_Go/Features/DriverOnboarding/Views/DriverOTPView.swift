@@ -30,10 +30,19 @@ struct DriverOTPView: View {
                 otpBoxRow
                     .offset(x: otpViewModel.shakeOffset)
                 hiddenInput
+                if case .error(let errorMessage) = otpViewModel.state {
+                    Text(errorMessage)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color.statusDanger)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 8)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
                 verifyButton
                 resendRow
                 Spacer()
             }
+            .animation(.easeInOut(duration: 0.2), value: otpViewModel.state)
             .padding(.horizontal, 24)
             .padding(.top, 24)
         }

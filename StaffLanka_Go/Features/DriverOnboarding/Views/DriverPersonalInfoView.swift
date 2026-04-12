@@ -33,7 +33,7 @@ struct DriverPersonalInfoView: View {
         .navigationBarBackButtonHidden(false)
         .navigationDestination(isPresented: $personalInfoViewModel.navigateToOTP) {
             DriverOTPView(
-                phoneNumber: "+94" + personalInfoViewModel.phoneNumber,
+                phoneNumber: personalInfoViewModel.fullPhoneNumberWithCountryCode,
                 personalInfoViewModel: personalInfoViewModel
             )
         }
@@ -152,32 +152,43 @@ struct DriverPersonalInfoView: View {
     }
 
     private var continueButton: some View {
-        Button {
-            Task { await personalInfoViewModel.sendOTP() }
-        } label: {
-            ZStack {
-                if personalInfoViewModel.isLoading {
-                    ProgressView().tint(.white)
-                } else {
-                    HStack(spacing: 8) {
-                        Text("Send OTP & Continue")
-                            .font(.system(size: 16, weight: .semibold))
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 14, weight: .semibold))
+        VStack(spacing: 10) {
+            Button {
+                Task { await personalInfoViewModel.sendOTP() }
+            } label: {
+                ZStack {
+                    if personalInfoViewModel.isLoading {
+                        ProgressView().tint(.white)
+                    } else {
+                        HStack(spacing: 8) {
+                            Text("Send OTP & Continue")
+                                .font(.system(size: 16, weight: .semibold))
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundStyle(.white)
                     }
-                    .foregroundStyle(.white)
                 }
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background(
+                    personalInfoViewModel.canContinue
+                    ? LinearGradient.brand
+                    : LinearGradient(colors: [Color.statusInactive.opacity(0.4)], startPoint: .leading, endPoint: .trailing)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 14))
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 54)
-            .background(
-                personalInfoViewModel.canContinue
-                ? LinearGradient.brand
-                : LinearGradient(colors: [Color.statusInactive.opacity(0.4)], startPoint: .leading, endPoint: .trailing)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .disabled(!personalInfoViewModel.canContinue || personalInfoViewModel.isLoading)
+
+            if let errorMessage = personalInfoViewModel.sendOTPErrorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.statusDanger)
+                    .multilineTextAlignment(.center)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
-        .disabled(!personalInfoViewModel.canContinue || personalInfoViewModel.isLoading)
+        .animation(.easeInOut(duration: 0.2), value: personalInfoViewModel.sendOTPErrorMessage)
     }
 }
 

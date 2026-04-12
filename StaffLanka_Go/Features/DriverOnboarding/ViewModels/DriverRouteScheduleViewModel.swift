@@ -9,6 +9,8 @@ import Foundation
 import SwiftUI
 import Combine
 import MapKit
+import FirebaseAuth
+import FirebaseFirestore
 
 
 struct MapSearchResult: Identifiable {
@@ -70,6 +72,23 @@ enum DayOfWeek: String, CaseIterable, Identifiable {
 
 @MainActor
 final class DriverRouteScheduleViewModel: ObservableObject {
+
+    private let upstreamPersonalInfoViewModel: DriverPersonalInfoViewModel
+    private let upstreamBusInfoViewModel: DriverBusInfoViewModel
+
+    init(
+        personalInfoViewModel: DriverPersonalInfoViewModel? = nil,
+        busInfoViewModel: DriverBusInfoViewModel? = nil
+    ) {
+        self.upstreamPersonalInfoViewModel = personalInfoViewModel ?? DriverPersonalInfoViewModel()
+        self.upstreamBusInfoViewModel = busInfoViewModel ?? DriverBusInfoViewModel()
+    }
+
+    @Published var morningOnlyPricePerMonth: String = "8500"
+    @Published var eveningOnlyPricePerMonth: String = "8500"
+    @Published var bothSessionsPricePerMonth: String = "14000"
+
+    @Published var submissionErrorMessage: String? = nil
 
     @Published var startingPoint: String = ""
     @Published var endingPoint: String = ""
@@ -333,9 +352,87 @@ final class DriverRouteScheduleViewModel: ObservableObject {
 
     func submitOnboarding() async {
         guard canSubmit else { return }
+        guard let authenticatedUserId = Auth.auth().currentUser?.uid else {
+            submissionErrorMessage = "You must be signed in to complete registration."
+            return
+        }
+
         isSubmitting = true
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
-        isSubmitting = false
-        onboardingComplete = true
+        submissionErrorMessage = nil
+
+        do {
+            let routeStopDataList: [RouteStopData] = orderedStops.enumerated().map { stopIndex, routeStop in
+                RouteStopData(
+                    stopName: routeStop.name,
+                    latitude: routeStop.coordinate?.latitude ?? 0.0,
+                    longitude: routeStop.coordinate?.longitude ?? 0.0,
+                    stopOrder: stopIndex
+                )
+            }
+
+            let morningScheduleEntry = RouteScheduleData(
+                scheduledDepartureTime: morningTrip.departureTime,
+                activeDays: selectedDays.map { $0.rawValue }
+            )
+            let eveningScheduleEntry = RouteScheduleData(
+                scheduledDepartureTime: eveningTrip.departureTime,
+                activeDays: selectedDays.map { $0.rawValue }
+            )
+
+            let combinedPricePerTrip = Double(bothSessionsPricePerMonth) ?? 14000.0
+
+            let newRouteRecord = RouteRecord(
+                id: nil,
+                ownerDriverId: authenticatedUserId,
+                startLocation: RouteLocationData(
+                    locationName: startingPoint,
+                    latitude: startCoordinate?.latitude ?? 0.0,
+                    longitude: startCoordinate?.longitude ?? 0.0
+                ),
+                endLocation: RouteLocationData(
+                    locationName: endingPoint,
+                    latitude: endCoordinate?.latitude ?? 0.0,
+                    longitude: endCoordinate?.longitude ?? 0.0
+                ),
+                routeStops: routeStopDataList,
+                scheduleEntries: [morningScheduleEntry, eveningScheduleEntry],
+                pricePerTrip: combinedPricePerTrip,
+                routeCreatedAt: Date()
+            )
+
+            let createdRouteId = try await RouteService.shared.createRoute(routeRecord: newRouteRecord)
+
+            let busInfoForDriver = DriverBusInfo(
+                plateNumber: upstreamBusInfoViewModel.plateNumber,
+                busName: upstreamBusInfoViewModel.busName,
+                busType: upstreamBusInfoViewModel.busType.rawValue,
+                passengerCapacity: Int(upstreamBusInfoViewModel.capacity) ?? 0
+            )
+
+            let newDriverRecord = DriverRecord(
+                id: authenticatedUserId,
+                fullName: upstreamPersonalInfoViewModel.fullName,
+                licenseNumber: upstreamPersonalInfoViewModel.licenseNumber,
+                busInformation: busInfoForDriver,
+                assignedRouteId: createdRouteId,
+                driverCreatedAt: Date()
+            )
+
+            try await DriverService.shared.createDriver(driverRecord: newDriverRecord)
+
+            try await UserService.shared.updateUserRole(
+                userId: authenticatedUserId,
+                updatedRole: "driver"
+            )
+
+            await AuthManager.shared.refreshUserRoleFromFirestore(userId: authenticatedUserId)
+
+            isSubmitting = false
+            onboardingComplete = true
+
+        } catch {
+            submissionErrorMessage = error.localizedDescription
+            isSubmitting = false
+        }
     }
 }

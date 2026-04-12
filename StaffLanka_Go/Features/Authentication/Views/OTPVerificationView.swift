@@ -10,53 +10,49 @@ import SwiftUI
 import Combine
 
 struct OTPVerificationView: View {
-    let phone: String
-    let onSuccess: () -> Void
-    
+
+    let phoneNumber: String
+
     @Environment(\.dismiss) private var dismiss
     @StateObject private var otpViewModel: OTPVerificationViewModel
-    @State private var activeIndex = 0
-    @FocusState private var focusedIndex: Int?
-    
-    var enteredOTP: String { otpViewModel.otpDigits.joined() }
-    
-    init(phone: String, onSuccess: @escaping () -> Void) {
-        self.phone = phone
-        self.onSuccess = onSuccess
-        _otpViewModel = StateObject(wrappedValue: OTPVerificationViewModel(phoneNumber: phone))
+    @State private var currentlyActiveBoxIndex: Int = 0
+    @FocusState private var hiddenFieldFocused: Bool
+
+    init(phoneNumber: String) {
+        self.phoneNumber = phoneNumber
+        _otpViewModel = StateObject(wrappedValue: OTPVerificationViewModel(phoneNumber: phoneNumber))
     }
 
     var body: some View {
         ZStack {
             Color.appBackground.ignoresSafeArea()
-            
+
             VStack(spacing: 32) {
                 headerSection
-                otpArea
-                    .offset(x: otpViewModel.shakeOffset)
-                hiddenInputField
+                otpBoxesRow
+                    .offset(x: otpViewModel.shakeAnimationOffset)
+                hiddenNumericInputField
                 verifyButton
-                resendRow
+                resendCodeRow
                 Spacer()
             }
         }
         .navigationBarHidden(false)
-        .fullScreenCover(isPresented: Binding(get: {otpViewModel.state == .success}, set: {_ in })){
-            PassengerNavigationBar()
-        }
-        .onChange(of: otpViewModel.state) { newState in
-            if newState == .success {
-                onSuccess()
-            }
+        .alert(
+            "Enable \(BiometricService.shared.biometricTypeDisplayName)?",
+            isPresented: $otpViewModel.shouldPromptBiometricEnrollment
+        ) {
+            Button("Enable") { otpViewModel.enrollBiometric() }
+            Button("Not Now", role: .cancel) { otpViewModel.dismissBiometricEnrollmentPrompt() }
+        } message: {
+            Text("Sign in faster next time using \(BiometricService.shared.biometricTypeDisplayName) instead of your phone number.")
         }
         .onAppear {
-            focusedIndex = 0
-            otpViewModel.startCountdown()
+            hiddenFieldFocused = true
+            otpViewModel.startResendCountdown()
         }
-        .onChange(of: enteredOTP) {
-            Task {
-                await otpViewModel.handleAutoSubmit()
-            }
+        .onChange(of: otpViewModel.enteredOTPString) {
+            Task { await otpViewModel.handleAutoSubmitIfComplete() }
         }
     }
 
@@ -75,7 +71,7 @@ struct OTPVerificationView: View {
                 .font(.system(size: 26, weight: .bold, design: .rounded))
                 .foregroundColor(.textPrimary)
 
-            Text("Enter the 6-digit code sent to\n\(phone)")
+            Text("Enter the 6-digit code sent to\n\(phoneNumber)")
                 .font(.system(size: 15, weight: .regular))
                 .foregroundColor(.textSecondary)
                 .multilineTextAlignment(.center)
@@ -83,7 +79,7 @@ struct OTPVerificationView: View {
         .padding(.top, 8)
     }
 
-    private var otpArea: some View {
+    private var otpBoxesRow: some View {
         VStack(alignment: .trailing, spacing: 14) {
             Button {
                 dismiss()
@@ -94,45 +90,46 @@ struct OTPVerificationView: View {
             }
 
             HStack(spacing: 10) {
-                ForEach(0..<6, id: \.self) { i in
-                    OTPDigitBox(digit: otpViewModel.otpDigits[i], isActive: activeIndex == i)
-                        .onTapGesture {
-                            activeIndex = i
-                            focusedIndex = 0
-                        }
+                ForEach(0..<6, id: \.self) { boxIndex in
+                    OTPDigitBox(
+                        digit: otpViewModel.otpDigits[boxIndex],
+                        isActive: currentlyActiveBoxIndex == boxIndex
+                    )
+                    .onTapGesture {
+                        currentlyActiveBoxIndex = boxIndex
+                        hiddenFieldFocused = true
+                    }
                 }
             }
         }
         .padding(.horizontal, 24)
     }
 
-    private var hiddenInputField: some View {
+    private var hiddenNumericInputField: some View {
         TextField("", text: Binding(
-            get: { enteredOTP },
-            set: { newVal in
-                let digits = newVal.filter(\.isNumber)
-                for i in 0..<6 {
-                    otpViewModel.otpDigits[i] = i < digits.count
-                        ? String(digits[digits.index(digits.startIndex, offsetBy: i)])
+            get: { otpViewModel.enteredOTPString },
+            set: { newInputValue in
+                let numericCharactersOnly = newInputValue.filter(\.isNumber)
+                for digitIndex in 0..<6 {
+                    otpViewModel.otpDigits[digitIndex] = digitIndex < numericCharactersOnly.count
+                        ? String(numericCharactersOnly[numericCharactersOnly.index(numericCharactersOnly.startIndex, offsetBy: digitIndex)])
                         : ""
                 }
-                activeIndex = min(digits.count, 5)
+                currentlyActiveBoxIndex = min(numericCharactersOnly.count, 5)
             }
         ))
         .keyboardType(.numberPad)
         .opacity(0)
         .frame(width: 1, height: 1)
-        .focused($focusedIndex, equals: 0)
+        .focused($hiddenFieldFocused)
     }
 
     private var verifyButton: some View {
         Button {
-            Task {
-                await otpViewModel.verify()
-            }
+            Task { await otpViewModel.verifyOTP() }
         } label: {
             ZStack {
-                if otpViewModel.state == .verifying {
+                if otpViewModel.verificationState == .verifying {
                     ProgressView().tint(.white)
                 } else {
                     Text("Verify")
@@ -143,34 +140,34 @@ struct OTPVerificationView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 54)
             .background(
-                otpViewModel.isComplete
-                ? Color.brandSecondary
-                : Color.statusInactive.opacity(0.35)
+                otpViewModel.isOTPComplete
+                    ? Color.brandSecondary
+                    : Color.statusInactive.opacity(0.35)
             )
             .clipShape(RoundedRectangle(cornerRadius: 14))
         }
-        .disabled(!otpViewModel.isComplete || otpViewModel.state == .verifying)
+        .disabled(!otpViewModel.isOTPComplete || otpViewModel.verificationState == .verifying)
         .padding(.horizontal, 24)
     }
 
-    private var resendRow: some View {
+    private var resendCodeRow: some View {
         Button {
             otpViewModel.resendOTP()
         } label: {
             Text(
-                otpViewModel.secondsRemaining > 0
-                ? "Resend Code in \(otpViewModel.secondsRemaining)s"
-                : "Resend Code"
+                otpViewModel.secondsRemainingForResend > 0
+                    ? "Resend Code in \(otpViewModel.secondsRemainingForResend)s"
+                    : "Resend Code"
             )
             .font(.system(size: 14, weight: .medium))
             .foregroundColor(
-                otpViewModel.secondsRemaining > 0
-                ? .textTertiary
-                : .brandSecondary
+                otpViewModel.secondsRemainingForResend > 0
+                    ? .textTertiary
+                    : .brandSecondary
             )
             .monospacedDigit()
         }
-        .disabled(!otpViewModel.canResend)
+        .disabled(!otpViewModel.canResendOTP)
     }
 }
 
@@ -198,7 +195,7 @@ struct OTPDigitBox: View {
 
 #Preview {
     NavigationStack {
-        OTPVerificationView(phone: "+94 77 123 4567") {}
+        OTPVerificationView(phoneNumber: "+94771234567")
     }
     .preferredColorScheme(.dark)
 }

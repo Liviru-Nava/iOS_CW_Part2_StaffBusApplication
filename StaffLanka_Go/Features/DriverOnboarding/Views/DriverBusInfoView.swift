@@ -35,7 +35,10 @@ struct DriverBusInfoView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(false)
         .navigationDestination(isPresented: $navigateToRoute) {
-            DriverRouteScheduleView(vm: DriverRouteScheduleViewModel())
+            DriverRouteScheduleView(vm: DriverRouteScheduleViewModel(
+                personalInfoViewModel: personalInfoViewModel,
+                busInfoViewModel: busInfoViewModel
+            ))
         }
         .onTapGesture { focusedField = nil }
     }

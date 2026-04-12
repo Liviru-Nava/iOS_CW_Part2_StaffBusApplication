@@ -8,19 +8,13 @@
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject var auth: AuthManager
-
     var body: some View {
-        Group {
-            if auth.isAuthenticated {
-                PassengerNavigationBar()
-            } else {
-                LoginView()
-            }
-        }
+        RootView()
     }
 }
 
 #Preview {
-    ContentView().environmentObject(AuthManager.shared)
+    ContentView()
+        .environmentObject(AuthManager.shared)
+        .preferredColorScheme(.dark)
 }
