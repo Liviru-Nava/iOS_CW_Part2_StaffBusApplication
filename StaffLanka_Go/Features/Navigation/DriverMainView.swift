@@ -38,7 +38,7 @@ struct DriverNavigationBar: View {
             .tag(2)
 
             NavigationStack {
-                DriverProfileComingSoonView()
+                DriverProfileView()
             }
             .tabItem {
                 Label("Profile", systemImage: selectedDriverTab == 3 ? "person.fill" : "person")

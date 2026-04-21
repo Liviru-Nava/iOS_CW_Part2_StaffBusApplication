@@ -6,7 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5A7A3D0C2F8B91BC008D34BE /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 5A7A3D0B2F8B91BC008D34BE /* FirebaseAuth */; };
+		5A7A3D122F8B94C3008D34BE /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5A7A3D112F8B94C3008D34BE /* GoogleService-Info.plist */; };
+		5A7A3D262F8BDAAA008D34BE /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 5A7A3D252F8BDAAA008D34BE /* FirebaseFirestore */; };
+		5A7A3D282F8BE112008D34BE /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5A7A3D272F8BE112008D34BE /* FirebaseCore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
+		5A7A3D112F8B94C3008D34BE /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		5A826B432F7191960044237A /* StaffLanka_Go.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StaffLanka_Go.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -23,17 +31,29 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5A7A3D0C2F8B91BC008D34BE /* FirebaseAuth in Frameworks */,
+				5A7A3D282F8BE112008D34BE /* FirebaseCore in Frameworks */,
+				5A7A3D262F8BDAAA008D34BE /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		5A7A3D242F8BDAAA008D34BE /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		5A826B3A2F7191960044237A = {
 			isa = PBXGroup;
 			children = (
 				5A826B452F7191960044237A /* StaffLanka_Go */,
 				5A826B442F7191960044237A /* Products */,
+				5A7A3D112F8B94C3008D34BE /* GoogleService-Info.plist */,
+				5A7A3D242F8BDAAA008D34BE /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -65,6 +85,9 @@
 			);
 			name = StaffLanka_Go;
 			packageProductDependencies = (
+				5A7A3D0B2F8B91BC008D34BE /* FirebaseAuth */,
+				5A7A3D252F8BDAAA008D34BE /* FirebaseFirestore */,
+				5A7A3D272F8BE112008D34BE /* FirebaseCore */,
 			);
 			productName = StaffLanka_Go;
 			productReference = 5A826B432F7191960044237A /* StaffLanka_Go.app */;
@@ -94,6 +117,9 @@
 			);
 			mainGroup = 5A826B3A2F7191960044237A;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5A7A3D0A2F8B91BC008D34BE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5A826B442F7191960044237A /* Products */;
 			projectDirPath = "";
@@ -109,6 +135,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5A7A3D122F8B94C3008D34BE /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -256,6 +283,7 @@
 				DEVELOPMENT_TEAM = W2JVDPC4G5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "StaffLanka-Go-Info.plist";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -288,6 +316,7 @@
 				DEVELOPMENT_TEAM = W2JVDPC4G5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "StaffLanka-Go-Info.plist";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -332,6 +361,35 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5A7A3D0A2F8B91BC008D34BE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.12.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5A7A3D0B2F8B91BC008D34BE /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A7A3D0A2F8B91BC008D34BE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		5A7A3D252F8BDAAA008D34BE /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A7A3D0A2F8B91BC008D34BE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+		5A7A3D272F8BE112008D34BE /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A7A3D0A2F8B91BC008D34BE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 5A826B3B2F7191960044237A /* Project object */;
 }
