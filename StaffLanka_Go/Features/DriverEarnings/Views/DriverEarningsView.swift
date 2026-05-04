@@ -204,18 +204,39 @@ struct DriverEarningsView: View {
                         .foregroundStyle(Color.textPrimary)
                 }
                 Spacer()
-                Text("Page \(currentPassengerListPage) of \(totalPageCount)")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.textSecondary)
-            }
-
-            VStack(spacing: 10) {
-                ForEach(passengerRecordsForCurrentPage) { passengerRecord in
-                    passengerPaymentRow(record: passengerRecord)
+                if earningsViewModel.totalPassengerCount > 0 {
+                    Text("Page \(currentPassengerListPage) of \(totalPageCount)")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.textSecondary)
                 }
             }
 
-            paginationControlRow
+            if earningsViewModel.totalPassengerCount == 0 {
+                VStack(spacing: 16) {
+                    Image(systemName: "creditcard.trianglebadge.exclamationmark")
+                        .font(.system(size: 36))
+                        .foregroundStyle(Color.statusInactive)
+                    Text("No payment records for this month.")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Color.textSecondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 160)
+                .background(Color.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(Color.divider, lineWidth: 1)
+                )
+                .padding(.top, 8)
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(passengerRecordsForCurrentPage) { passengerRecord in
+                        passengerPaymentRow(record: passengerRecord)
+                    }
+                }
+
+                paginationControlRow
+            }
         }
     }
 

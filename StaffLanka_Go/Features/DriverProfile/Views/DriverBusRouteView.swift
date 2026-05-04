@@ -5,12 +5,11 @@
 //  Created by Liviru Navaratna on 2026-04-10.
 //
 
-
 import SwiftUI
 
 struct DriverBusRouteView: View {
 
-    @ObservedObject var profileViewModel: DriverProfileViewModel
+    @ObservedObject var driverProfileViewModel: DriverProfileViewModel
 
     var body: some View {
         List {
@@ -24,56 +23,64 @@ struct DriverBusRouteView: View {
         .background(Color.appBackground)
         .navigationTitle("Bus & Route")
         .navigationBarTitleDisplayMode(.large)
-        .sheet(isPresented: $profileViewModel.isEditingBusDetails) {
-            DriverEditBusDetailsSheet(profileViewModel: profileViewModel)
+        .sheet(isPresented: $driverProfileViewModel.isEditingBusDetails) {
+            DriverEditBusDetailsSheet(driverProfileViewModel: driverProfileViewModel)
         }
-        .sheet(isPresented: $profileViewModel.isEditingPricingDetails) {
-            DriverEditPricingSheet(profileViewModel: profileViewModel)
+        .sheet(isPresented: $driverProfileViewModel.isEditingPricingDetails) {
+            DriverEditPricingSheet(driverProfileViewModel: driverProfileViewModel)
+        }
+        .sheet(isPresented: $driverProfileViewModel.isEditingRouteStops) {
+            DriverEditRouteStopsSheet(driverProfileViewModel: driverProfileViewModel)
+        }
+        .sheet(isPresented: $driverProfileViewModel.isEditingSchedule) {
+            DriverEditScheduleSheet(driverProfileViewModel: driverProfileViewModel)
         }
     }
 
     private var busDetailsSection: some View {
         Section {
-            detailRow(label: "Plate Number", value: profileViewModel.busDetailsInformationValues.busPlateNumber)
+            detailRow(label: "Plate Number", value: driverProfileViewModel.busDetailsInformationValues.busPlateNumber)
                 .listRowBackground(Color.cardBackground)
-            detailRow(label: "Bus Name", value: profileViewModel.busDetailsInformationValues.busDisplayName)
+            detailRow(label: "Bus Name", value: driverProfileViewModel.busDetailsInformationValues.busDisplayName)
                 .listRowBackground(Color.cardBackground)
-            detailRow(label: "Vehicle Type", value: profileViewModel.busDetailsInformationValues.busVehicleType.rawValue)
+            detailRow(label: "Vehicle Type", value: driverProfileViewModel.busDetailsInformationValues.busVehicleType.rawValue)
                 .listRowBackground(Color.cardBackground)
-            detailRow(label: "Capacity", value: "\(profileViewModel.busDetailsInformationValues.busPassengerCapacity) seats")
+            detailRow(label: "Capacity", value: "\(driverProfileViewModel.busDetailsInformationValues.busPassengerCapacity) seats")
                 .listRowBackground(Color.cardBackground)
         } header: {
-            Text("Bus Details")
-        } footer: {
-            Button {
-                profileViewModel.openBusDetailsEditMode()
-            } label: {
-                Label("Edit Bus Details", systemImage: "pencil")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.brandAccent)
+            // Edit icon is placed inline with the section title
+            HStack {
+                Text("Bus Details")
+                Spacer()
+                Button {
+                    driverProfileViewModel.openBusDetailsEditMode()
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.brandAccent)
+                }
             }
-            .padding(.top, 4)
         }
     }
 
     private var routeSection: some View {
-        Section("Route") {
-            detailRow(label: "Starting Point", value: profileViewModel.routeInformationValues.routeStartingPointName)
+        Section {
+            detailRow(label: "Starting Point", value: driverProfileViewModel.routeInformationValues.routeStartingPointName)
                 .listRowBackground(Color.cardBackground)
-            detailRow(label: "Ending Point", value: profileViewModel.routeInformationValues.routeEndingPointName)
+            detailRow(label: "Ending Point", value: driverProfileViewModel.routeInformationValues.routeEndingPointName)
                 .listRowBackground(Color.cardBackground)
-            detailRow(label: "Total Stops", value: "\(profileViewModel.routeInformationValues.orderedListOfRouteStops.count)")
+            detailRow(label: "Total Stops", value: "\(driverProfileViewModel.routeInformationValues.orderedListOfRouteStops.count)")
                 .listRowBackground(Color.cardBackground)
 
-            ForEach(Array(profileViewModel.routeInformationValues.orderedListOfRouteStops.enumerated()), id: \.element.id) { index, stop in
+            ForEach(Array(driverProfileViewModel.routeInformationValues.orderedListOfRouteStops.enumerated()), id: \.element.id) { index, stop in
                 HStack(spacing: 12) {
                     ZStack {
                         Circle()
-                            .fill(stopNumberBackgroundColor(index: index, total: profileViewModel.routeInformationValues.orderedListOfRouteStops.count))
+                            .fill(stopNumberBackgroundColor(index: index, total: driverProfileViewModel.routeInformationValues.orderedListOfRouteStops.count))
                             .frame(width: 28, height: 28)
-                        Text("\(stop.stopPositionIndex)")
+                        Text("\(stop.stopPositionIndex + 1)")
                             .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(stopNumberForegroundColor(index: index, total: profileViewModel.routeInformationValues.orderedListOfRouteStops.count))
+                            .foregroundColor(stopNumberForegroundColor(index: index, total: driverProfileViewModel.routeInformationValues.orderedListOfRouteStops.count))
                     }
 
                     Text(stop.stopDisplayName)
@@ -84,24 +91,37 @@ struct DriverBusRouteView: View {
 
                     if index == 0 {
                         stopBadge(labelText: "Start", badgeColor: .statusActive)
-                    } else if index == profileViewModel.routeInformationValues.orderedListOfRouteStops.count - 1 {
+                    } else if index == driverProfileViewModel.routeInformationValues.orderedListOfRouteStops.count - 1 {
                         stopBadge(labelText: "End", badgeColor: .statusDanger)
                     }
                 }
                 .listRowBackground(Color.cardBackground)
             }
+        } header: {
+            // Edit icon is placed inline with the section title
+            HStack {
+                Text("Route")
+                Spacer()
+                Button {
+                    driverProfileViewModel.openRouteEditMode()
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.brandAccent)
+                }
+            }
         }
     }
 
     private var scheduleSection: some View {
-        Section("Schedule") {
+        Section {
             HStack(spacing: 12) {
                 profileIconBadge(systemIconName: "sunrise.fill", badgeColor: .statusWarning)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Morning Trip")
                         .font(.system(size: 15))
                         .foregroundColor(.textPrimary)
-                    Text("Departs \(profileViewModel.scheduleDetailsValues.morningTripSchedule.departureTime)  ·  Arrives ~\(profileViewModel.scheduleDetailsValues.morningTripSchedule.estimatedArrivalTime)")
+                    Text("Departs \(driverProfileViewModel.scheduleDetailsValues.morningTripSchedule.departureTime)  ·  Arrives ~\(driverProfileViewModel.scheduleDetailsValues.morningTripSchedule.estimatedArrivalTime)")
                         .font(.system(size: 12))
                         .foregroundColor(.textSecondary)
                 }
@@ -115,35 +135,50 @@ struct DriverBusRouteView: View {
                     Text("Evening Trip")
                         .font(.system(size: 15))
                         .foregroundColor(.textPrimary)
-                    Text("Departs \(profileViewModel.scheduleDetailsValues.eveningTripSchedule.departureTime)  ·  Arrives ~\(profileViewModel.scheduleDetailsValues.eveningTripSchedule.estimatedArrivalTime)")
+                    Text("Departs \(driverProfileViewModel.scheduleDetailsValues.eveningTripSchedule.departureTime)  ·  Arrives ~\(driverProfileViewModel.scheduleDetailsValues.eveningTripSchedule.estimatedArrivalTime)")
                         .font(.system(size: 12))
                         .foregroundColor(.textSecondary)
                 }
             }
             .padding(.vertical, 2)
             .listRowBackground(Color.cardBackground)
+        } header: {
+            // Edit icon is placed inline with the section title
+            HStack {
+                Text("Schedule")
+                Spacer()
+                Button {
+                    driverProfileViewModel.openScheduleEditMode()
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.brandAccent)
+                }
+            }
         }
     }
 
     private var pricingSection: some View {
         Section {
-            pricingRow(label: "Morning Only", amount: profileViewModel.pricingDetailsValues.morningOnlyMonthlyFee, dotColor: .statusWarning)
+            pricingRow(label: "Morning Only", amount: driverProfileViewModel.pricingDetailsValues.morningOnlyMonthlyFee, dotColor: .statusWarning)
                 .listRowBackground(Color.cardBackground)
-            pricingRow(label: "Evening Only", amount: profileViewModel.pricingDetailsValues.eveningOnlyMonthlyFee, dotColor: Color(hex: "#FF7B54"))
+            pricingRow(label: "Evening Only", amount: driverProfileViewModel.pricingDetailsValues.eveningOnlyMonthlyFee, dotColor: Color(hex: "#FF7B54"))
                 .listRowBackground(Color.cardBackground)
-            pricingRow(label: "Both Sessions", amount: profileViewModel.pricingDetailsValues.bothSessionsMonthlyFee, dotColor: .brandAccent)
+            pricingRow(label: "Both Sessions", amount: driverProfileViewModel.pricingDetailsValues.bothSessionsMonthlyFee, dotColor: .brandAccent)
                 .listRowBackground(Color.cardBackground)
         } header: {
-            Text("Monthly Pricing")
-        } footer: {
-            Button {
-                profileViewModel.openPricingDetailsEditMode()
-            } label: {
-                Label("Edit Pricing", systemImage: "pencil")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.brandAccent)
+            // Edit icon is placed inline with the section title
+            HStack {
+                Text("Monthly Pricing")
+                Spacer()
+                Button {
+                    driverProfileViewModel.openPricingDetailsEditMode()
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.brandAccent)
+                }
             }
-            .padding(.top, 4)
         }
     }
 

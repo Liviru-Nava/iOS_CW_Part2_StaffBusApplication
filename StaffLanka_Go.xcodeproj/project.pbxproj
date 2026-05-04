@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5A23192F2F9783C3003EC56B /* StaffLanka-Go-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5A23192E2F9783C3003EC56B /* StaffLanka-Go-Info.plist */; };
 		5A7A3D0C2F8B91BC008D34BE /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 5A7A3D0B2F8B91BC008D34BE /* FirebaseAuth */; };
 		5A7A3D122F8B94C3008D34BE /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5A7A3D112F8B94C3008D34BE /* GoogleService-Info.plist */; };
 		5A7A3D262F8BDAAA008D34BE /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 5A7A3D252F8BDAAA008D34BE /* FirebaseFirestore */; };
@@ -14,6 +15,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		5A23192E2F9783C3003EC56B /* StaffLanka-Go-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "StaffLanka-Go-Info.plist"; sourceTree = "<group>"; };
 		5A7A3D112F8B94C3008D34BE /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		5A826B432F7191960044237A /* StaffLanka_Go.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StaffLanka_Go.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -50,6 +52,7 @@
 		5A826B3A2F7191960044237A = {
 			isa = PBXGroup;
 			children = (
+				5A23192E2F9783C3003EC56B /* StaffLanka-Go-Info.plist */,
 				5A826B452F7191960044237A /* StaffLanka_Go */,
 				5A826B442F7191960044237A /* Products */,
 				5A7A3D112F8B94C3008D34BE /* GoogleService-Info.plist */,
@@ -135,6 +138,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5A23192F2F9783C3003EC56B /* StaffLanka-Go-Info.plist in Resources */,
 				5A7A3D122F8B94C3008D34BE /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

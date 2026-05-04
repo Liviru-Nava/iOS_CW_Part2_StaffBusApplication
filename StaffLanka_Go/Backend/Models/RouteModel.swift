@@ -37,32 +37,39 @@ struct RouteStopData: Codable {
 
 struct RouteScheduleData: Codable {
     var scheduledDepartureTime: Date
+    var scheduledArrivalTime: Date?
     var activeDays: [String]
 
     enum CodingKeys: String, CodingKey {
         case scheduledDepartureTime = "departureTime"
+        case scheduledArrivalTime   = "arrivalTime"
         case activeDays             = "days"
     }
 }
 
-struct RouteRecord: Codable, Identifiable {
+struct RouteModel: Codable, Identifiable {
     @DocumentID var id: String?
     var ownerDriverId: String
     var startLocation: RouteLocationData
     var endLocation: RouteLocationData
     var routeStops: [RouteStopData]
     var scheduleEntries: [RouteScheduleData]
-    var pricePerTrip: Double
+    var morningPrice: Double?
+    var eveningPrice: Double?
+    var bothTripsPrice: Double?
+    var pricePerTrip: Double?
     var routeCreatedAt: Date
 
     enum CodingKeys: String, CodingKey {
-        case id
         case ownerDriverId  = "driverId"
-        case startLocation
-        case endLocation
+        case startLocation  = "startingLocation"
+        case endLocation    = "endingLocation"
         case routeStops     = "stops"
         case scheduleEntries = "schedule"
-        case pricePerTrip
+        case morningPrice   = "morningPrice"
+        case eveningPrice   = "eveningPrice"
+        case bothTripsPrice = "bothTripsPrice"
+        case pricePerTrip   = "pricePerTrip"
         case routeCreatedAt = "createdAt"
     }
 }

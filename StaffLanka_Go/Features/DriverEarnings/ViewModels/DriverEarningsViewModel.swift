@@ -38,59 +38,35 @@ final class DriverEarningsViewModel: ObservableObject {
 
     private let aprilEarningsSummary = MonthlyEarningsSummary(
         monthDisplayLabel: "April 2026",
-        totalEarningsAmount: 210_000,
-        totalCollectedAmount: 160_000,
-        totalPendingAmount: 50_000,
-        passengerPaymentRecords: [
-            PassengerPaymentRecord(passengerFullName: "Amali Fernando", boardingStopName: "Nugegoda Junction", routeServiceType: .both, monthlyFeeAmount: 14_000, hasPassengerPaid: true),
-            PassengerPaymentRecord(passengerFullName: "Ruwan Perera", boardingStopName: "Maharagama Town", routeServiceType: .morning, monthlyFeeAmount: 8_500, hasPassengerPaid: true),
-            PassengerPaymentRecord(passengerFullName: "Nimal Silva", boardingStopName: "Borella", routeServiceType: .both, monthlyFeeAmount: 14_000, hasPassengerPaid: false),
-            PassengerPaymentRecord(passengerFullName: "Kalyani Jayawardena", boardingStopName: "Borella", routeServiceType: .evening, monthlyFeeAmount: 8_500, hasPassengerPaid: true),
-            PassengerPaymentRecord(passengerFullName: "Thilak Rajapaksa", boardingStopName: "Nugegoda Junction", routeServiceType: .morning, monthlyFeeAmount: 8_500, hasPassengerPaid: false),
-            PassengerPaymentRecord(passengerFullName: "Saman Bandara", boardingStopName: "Maharagama Town", routeServiceType: .both, monthlyFeeAmount: 14_000, hasPassengerPaid: true),
-            PassengerPaymentRecord(passengerFullName: "Dilrukshi Wijesinghe", boardingStopName: "Borella", routeServiceType: .morning, monthlyFeeAmount: 8_500, hasPassengerPaid: true),
-            PassengerPaymentRecord(passengerFullName: "Prasad Gunasekara", boardingStopName: "Nugegoda Junction", routeServiceType: .both, monthlyFeeAmount: 14_000, hasPassengerPaid: false),
-            PassengerPaymentRecord(passengerFullName: "Iresha Dissanayake", boardingStopName: "Maharagama Town", routeServiceType: .evening, monthlyFeeAmount: 8_500, hasPassengerPaid: false),
-            PassengerPaymentRecord(passengerFullName: "Chamara Liyanage", boardingStopName: "Borella", routeServiceType: .both, monthlyFeeAmount: 14_000, hasPassengerPaid: false),
-            PassengerPaymentRecord(passengerFullName: "Madhavi Rathnayake", boardingStopName: "Nugegoda Junction", routeServiceType: .morning, monthlyFeeAmount: 8_500, hasPassengerPaid: true),
-            PassengerPaymentRecord(passengerFullName: "Ajith Kumara", boardingStopName: "Maharagama Town", routeServiceType: .both, monthlyFeeAmount: 14_000, hasPassengerPaid: true),
-        ],
+        totalEarningsAmount: 0,
+        totalCollectedAmount: 0,
+        totalPendingAmount: 0,
+        passengerPaymentRecords: [],
         paymentDeadlineDisplayText: "April 30, 2026",
-        gracePeriodDisplayText: "Grace period active until May 7, 2026",
-        currentDeadlineStatusType: .gracePeriodActive
+        gracePeriodDisplayText: "No earnings recorded yet.",
+        currentDeadlineStatusType: .paid
     )
 
     private let marchEarningsSummary = MonthlyEarningsSummary(
         monthDisplayLabel: "March 2026",
-        totalEarningsAmount: 198_000,
-        totalCollectedAmount: 198_000,
+        totalEarningsAmount: 0,
+        totalCollectedAmount: 0,
         totalPendingAmount: 0,
-        passengerPaymentRecords: [
-            PassengerPaymentRecord(passengerFullName: "Amali Fernando", boardingStopName: "Nugegoda Junction", routeServiceType: .both, monthlyFeeAmount: 14_000, hasPassengerPaid: true),
-            PassengerPaymentRecord(passengerFullName: "Ruwan Perera", boardingStopName: "Maharagama Town", routeServiceType: .morning, monthlyFeeAmount: 8_500, hasPassengerPaid: true),
-            PassengerPaymentRecord(passengerFullName: "Nimal Silva", boardingStopName: "Borella", routeServiceType: .both, monthlyFeeAmount: 14_000, hasPassengerPaid: true),
-            PassengerPaymentRecord(passengerFullName: "Kalyani Jayawardena", boardingStopName: "Borella", routeServiceType: .evening, monthlyFeeAmount: 8_500, hasPassengerPaid: true),
-            PassengerPaymentRecord(passengerFullName: "Thilak Rajapaksa", boardingStopName: "Nugegoda Junction", routeServiceType: .morning, monthlyFeeAmount: 8_500, hasPassengerPaid: true),
-        ],
+        passengerPaymentRecords: [],
         paymentDeadlineDisplayText: "March 31, 2026",
-        gracePeriodDisplayText: "All payments settled",
+        gracePeriodDisplayText: "No earnings recorded.",
         currentDeadlineStatusType: .paid
     )
 
     private let februaryEarningsSummary = MonthlyEarningsSummary(
         monthDisplayLabel: "February 2026",
-        totalEarningsAmount: 185_000,
-        totalCollectedAmount: 162_000,
-        totalPendingAmount: 23_000,
-        passengerPaymentRecords: [
-            PassengerPaymentRecord(passengerFullName: "Amali Fernando", boardingStopName: "Nugegoda Junction", routeServiceType: .both, monthlyFeeAmount: 14_000, hasPassengerPaid: true),
-            PassengerPaymentRecord(passengerFullName: "Ruwan Perera", boardingStopName: "Maharagama Town", routeServiceType: .morning, monthlyFeeAmount: 8_500, hasPassengerPaid: false),
-            PassengerPaymentRecord(passengerFullName: "Nimal Silva", boardingStopName: "Borella", routeServiceType: .both, monthlyFeeAmount: 14_000, hasPassengerPaid: false),
-            PassengerPaymentRecord(passengerFullName: "Kalyani Jayawardena", boardingStopName: "Borella", routeServiceType: .evening, monthlyFeeAmount: 8_500, hasPassengerPaid: true),
-        ],
+        totalEarningsAmount: 0,
+        totalCollectedAmount: 0,
+        totalPendingAmount: 0,
+        passengerPaymentRecords: [],
         paymentDeadlineDisplayText: "February 28, 2026",
-        gracePeriodDisplayText: "Overdue – payment deadline has passed",
-        currentDeadlineStatusType: .overdue
+        gracePeriodDisplayText: "No earnings recorded.",
+        currentDeadlineStatusType: .paid
     )
 
     @Published var selectedMonthForEarningsDisplay: String = "April 2026"

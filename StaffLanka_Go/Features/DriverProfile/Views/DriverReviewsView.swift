@@ -9,7 +9,7 @@ import SwiftUI
 
 struct DriverReviewsView: View {
 
-    @ObservedObject var profileViewModel: DriverProfileViewModel
+    @ObservedObject var driverProfileViewModel: DriverProfileViewModel
 
     var body: some View {
         List {
@@ -27,17 +27,17 @@ struct DriverReviewsView: View {
         Section {
             HStack(spacing: 24) {
                 VStack(spacing: 6) {
-                    Text(String(format: "%.1f", profileViewModel.averageDriverRatingValue))
+                    Text(String(format: "%.1f", driverProfileViewModel.averageDriverRatingValue))
                         .font(.system(size: 52, weight: .bold, design: .rounded))
                         .foregroundColor(.textPrimary)
                     HStack(spacing: 4) {
                         ForEach(0 ..< 5) { starIndex in
-                            Image(systemName: Double(starIndex) < profileViewModel.averageDriverRatingValue ? "star.fill" : "star")
+                            Image(systemName: Double(starIndex) < driverProfileViewModel.averageDriverRatingValue ? "star.fill" : "star")
                                 .font(.system(size: 14))
                                 .foregroundColor(.statusWarning)
                         }
                     }
-                    Text("\(profileViewModel.driverReviewsList.count) reviews")
+                    Text("\(driverProfileViewModel.driverReviewsList.count) reviews")
                         .font(.system(size: 12))
                         .foregroundColor(.textTertiary)
                 }
@@ -81,7 +81,7 @@ struct DriverReviewsView: View {
 
     private var reviewsListSection: some View {
         Section {
-            if profileViewModel.driverReviewsList.isEmpty {
+            if driverProfileViewModel.driverReviewsList.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "star.slash")
                         .font(.system(size: 40))
@@ -98,7 +98,7 @@ struct DriverReviewsView: View {
                 .padding(.vertical, 40)
                 .listRowBackground(Color.clear)
             } else {
-                ForEach(profileViewModel.driverReviewsList) { review in
+                ForEach(driverProfileViewModel.driverReviewsList) { review in
                     reviewCard(review: review)
                         .listRowBackground(Color.cardBackground)
                 }
@@ -148,12 +148,12 @@ struct DriverReviewsView: View {
     }
 
     private func reviewCountForStarLevel(_ starLevel: Int) -> Int {
-        profileViewModel.driverReviewsList.filter { Int($0.reviewRatingOutOfFive.rounded()) == starLevel }.count
+        driverProfileViewModel.driverReviewsList.filter { Int($0.reviewRatingOutOfFive.rounded()) == starLevel }.count
     }
 
     private func ratingBarFraction(forStar starLevel: Int) -> CGFloat {
-        guard !profileViewModel.driverReviewsList.isEmpty else { return 0 }
+        guard !driverProfileViewModel.driverReviewsList.isEmpty else { return 0 }
         let countForLevel = reviewCountForStarLevel(starLevel)
-        return CGFloat(countForLevel) / CGFloat(profileViewModel.driverReviewsList.count)
+        return CGFloat(countForLevel) / CGFloat(driverProfileViewModel.driverReviewsList.count)
     }
 }

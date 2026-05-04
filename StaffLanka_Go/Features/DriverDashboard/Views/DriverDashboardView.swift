@@ -25,6 +25,9 @@ struct DriverDashboardView: View {
         }
         .background(Color.appBackground.ignoresSafeArea())
         .ignoresSafeArea(edges: .top)
+        .onAppear {
+            dashboardViewModel.fetchDriverData()
+        }
         .fullScreenCover(isPresented: $showRouteMapFullScreen) {
             RouteMapFullscreenView(isPresented: $showRouteMapFullScreen, sessionType: dashboardViewModel.selectedSessionType)
         }
@@ -433,9 +436,13 @@ struct DriverDashboardView: View {
                     .foregroundStyle(Color.textTertiary)
             }
 
-            VStack(spacing: 8) {
-                ForEach(dashboardViewModel.currentSessionAttendanceStops) { attendanceStop in
-                    attendanceStopRow(attendanceStop: attendanceStop)
+            if dashboardViewModel.currentSessionAttendanceStops.isEmpty {
+                emptyStateCard(icon: "person.3.sequence.fill", message: "No passenger attendance scheduled yet.")
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(dashboardViewModel.currentSessionAttendanceStops) { attendanceStop in
+                        attendanceStopRow(attendanceStop: attendanceStop)
+                    }
                 }
             }
         }
@@ -567,6 +574,21 @@ struct DriverDashboardView: View {
             .padding(.vertical, 4)
             .background(badgeBackgroundColor)
             .clipShape(Capsule())
+    }
+
+    private func emptyStateCard(icon: String, message: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 24))
+                .foregroundStyle(Color.textTertiary)
+            Text(message)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+        .background(Color.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var tripSummarySection: some View {

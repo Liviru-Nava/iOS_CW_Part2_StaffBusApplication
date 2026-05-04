@@ -23,6 +23,7 @@ struct DriverRouteScheduleView: View {
                     }
                     stopsSection
                     scheduleSection
+                    pricingSection
                     submitButton
                 }
                 .padding(.horizontal, 0)
@@ -372,6 +373,66 @@ struct DriverRouteScheduleView: View {
             .padding(.vertical, 10)
             .background(Color.surfaceBackground)
             .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+    }
+
+    private var pricingSection: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Text("Trip Pricing (LKR)")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.textPrimary)
+                Spacer()
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                priceInputField(label: "Morning Trip Only", placeholder: "e.g. 8500", text: $vm.morningPrice)
+                priceInputField(label: "Evening Trip Only", placeholder: "e.g. 8500", text: $vm.eveningPrice)
+                priceInputField(label: "Both Trips (Daily)", placeholder: "e.g. 14000", text: $vm.bothTripsPrice)
+                
+                if !vm.isPricingValid {
+                    Text("Prices must be between 5,000 and 15,000. Both trips must be less than the sum of morning and evening.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.statusDanger)
+                        .padding(.top, 4)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, 16)
+    }
+    
+    private func priceInputField(label: String, placeholder: String, text: Binding<String>) -> some View {
+        HStack(spacing: 12) {
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color.textSecondary)
+            
+            Spacer()
+            
+            HStack(spacing: 6) {
+                Text("Rs.")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.textTertiary)
+                
+                TextField(placeholder, text: text)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.textPrimary)
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 80)
+                    .tint(Color.brandAccent)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color.surfaceBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(Color.divider, lineWidth: 1)
+            )
         }
     }
 
