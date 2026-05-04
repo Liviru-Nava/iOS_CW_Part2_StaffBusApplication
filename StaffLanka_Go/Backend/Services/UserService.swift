@@ -27,17 +27,17 @@ final class UserService {
         guard !existingUserSnapshot.exists else { return }
 
         let newUserDocument: [String: Any] = [
-            "phone"     : phoneNumber,
-            "name"      : "New User",
-            "role"      : "passenger",
-            "emailAddress": "",
-            "createdAt" : Timestamp(date: Date())
+            "phone"        : phoneNumber,
+            "name"         : "New User",
+            "role"         : "passenger",
+            "emailAddress" : "",
+            "createdAt"    : Timestamp(date: Date())
         ]
 
         try await userDocumentReference.setData(newUserDocument)
     }
 
-    func fetchUser(userId: String) async throws -> AppUser? {
+    func fetchUser(userId: String) async throws -> UserModel? {
         let userDocumentReference = firestoreDatabase
             .collection(usersCollectionPath)
             .document(userId)
@@ -46,14 +46,39 @@ final class UserService {
 
         guard userDocumentSnapshot.exists else { return nil }
 
-        return try userDocumentSnapshot.data(as: AppUser.self)
+        return try userDocumentSnapshot.data(as: UserModel.self)
     }
 
-    func updateUserRole(userId: String, updatedRole: String) async throws {
+    func updateUserRoleAndName(userId: String, updatedRole: String, fullName: String) async throws {
         let userDocumentReference = firestoreDatabase
             .collection(usersCollectionPath)
             .document(userId)
 
-        try await userDocumentReference.updateData(["role": updatedRole])
+        try await userDocumentReference.updateData([
+            "role": updatedRole,
+            "name": fullName
+        ])
+    }
+
+    // Updates only the email address field in the users collection
+    func updateUserEmailAddress(userId: String, updatedEmailAddress: String) async throws {
+        let userDocumentReference = firestoreDatabase
+            .collection(usersCollectionPath)
+            .document(userId)
+
+        try await userDocumentReference.updateData([
+            "emailAddress": updatedEmailAddress
+        ])
+    }
+
+    // Updates only the phone number field in the users collection after OTP verification
+    func updateUserPhoneNumber(userId: String, updatedPhoneNumber: String) async throws {
+        let userDocumentReference = firestoreDatabase
+            .collection(usersCollectionPath)
+            .document(userId)
+
+        try await userDocumentReference.updateData([
+            "phone": updatedPhoneNumber
+        ])
     }
 }

@@ -9,7 +9,7 @@
 import Foundation
 import FirebaseFirestore
 
-struct AppUser: Codable, Identifiable {
+struct UserModel: Codable, Identifiable {
     @DocumentID var id: String?
     var phoneNumber: String
     var fullName: String
@@ -18,10 +18,9 @@ struct AppUser: Codable, Identifiable {
     var accountCreatedAt: Date
 
     enum CodingKeys: String, CodingKey {
-        case id
         case phoneNumber      = "phone"
         case fullName         = "name"
-        case emailAddress     = "email"
+        case emailAddress     = "emailAddress"
         case userRole         = "role"
         case accountCreatedAt = "createdAt"
     }

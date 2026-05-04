@@ -17,11 +17,30 @@ final class RouteService {
     private let firestoreDatabase = Firestore.firestore()
     private let routesCollectionPath = "routes"
 
-    func createRoute(routeRecord: RouteRecord) async throws -> String {
+    func createRoute(routeRecord: RouteModel) async throws -> String {
         let newRouteDocumentReference = try firestoreDatabase
             .collection(routesCollectionPath)
             .addDocument(from: routeRecord)
 
         return newRouteDocumentReference.documentID
+    }
+
+    func fetchRoute(routeId: String) async throws -> RouteModel {
+        let routeDocumentSnapshot = try await firestoreDatabase
+            .collection(routesCollectionPath)
+            .document(routeId)
+            .getDocument()
+
+        return try routeDocumentSnapshot.data(as: RouteModel.self)
+    }
+
+    func updateRoute(routeId: String, updatedRecord: RouteModel) async throws {
+        let _ = try firestoreDatabase
+            .collection(routesCollectionPath)
+            .document(routeId)
+        try await firestoreDatabase
+            .collection(routesCollectionPath)
+            .document(routeId)
+            .setData(from: updatedRecord, merge: true)
     }
 }

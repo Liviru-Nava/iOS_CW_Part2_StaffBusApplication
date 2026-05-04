@@ -9,11 +9,11 @@ import SwiftUI
 
 struct DriverPassengerRequestsView: View {
 
-    @ObservedObject var profileViewModel: DriverProfileViewModel
+    @ObservedObject var driverProfileViewModel: DriverProfileViewModel
 
     var body: some View {
         List {
-            if profileViewModel.passengerRequestsList.isEmpty {
+            if driverProfileViewModel.passengerRequestsList.isEmpty {
                 emptyStateSection
             } else {
                 summarySection
@@ -31,25 +31,25 @@ struct DriverPassengerRequestsView: View {
         Section {
             HStack(spacing: 0) {
                 summaryStatCell(
-                    value: "\(profileViewModel.passengerRequestsList.count)",
+                    value: "\(driverProfileViewModel.passengerRequestsList.count)",
                     label: "Pending",
                     valueColor: .statusWarning
                 )
                 Divider().frame(height: 36)
                 summaryStatCell(
-                    value: "\(profileViewModel.passengerRequestsList.filter { $0.preferredSessionType == .morningOnly }.count)",
+                    value: "\(driverProfileViewModel.passengerRequestsList.filter { $0.preferredSessionType == .morningOnly }.count)",
                     label: "Morning",
                     valueColor: .statusWarning
                 )
                 Divider().frame(height: 36)
                 summaryStatCell(
-                    value: "\(profileViewModel.passengerRequestsList.filter { $0.preferredSessionType == .eveningOnly }.count)",
+                    value: "\(driverProfileViewModel.passengerRequestsList.filter { $0.preferredSessionType == .eveningOnly }.count)",
                     label: "Evening",
                     valueColor: Color(hex: "#FF7B54")
                 )
                 Divider().frame(height: 36)
                 summaryStatCell(
-                    value: "\(profileViewModel.passengerRequestsList.filter { $0.preferredSessionType == .bothSessions }.count)",
+                    value: "\(driverProfileViewModel.passengerRequestsList.filter { $0.preferredSessionType == .bothSessions }.count)",
                     label: "Both",
                     valueColor: .brandAccent
                 )
@@ -73,7 +73,7 @@ struct DriverPassengerRequestsView: View {
 
     private var requestsSection: some View {
         Section {
-            ForEach(profileViewModel.passengerRequestsList) { request in
+            ForEach(driverProfileViewModel.passengerRequestsList) { request in
                 passengerRequestRow(request: request)
                     .listRowBackground(Color.cardBackground)
             }
@@ -132,7 +132,7 @@ struct DriverPassengerRequestsView: View {
 
             HStack(spacing: 10) {
                 Button {
-                    profileViewModel.acceptPassengerJoinRequest(requestIdentifier: request.id)
+                    driverProfileViewModel.acceptPassengerJoinRequest(requestIdentifier: request.id)
                 } label: {
                     Label("Accept", systemImage: "checkmark")
                         .font(.system(size: 14, weight: .semibold))
@@ -145,7 +145,7 @@ struct DriverPassengerRequestsView: View {
                 .buttonStyle(.plain)
 
                 Button {
-                    profileViewModel.rejectPassengerJoinRequest(requestIdentifier: request.id)
+                    driverProfileViewModel.rejectPassengerJoinRequest(requestIdentifier: request.id)
                 } label: {
                     Label("Reject", systemImage: "xmark")
                         .font(.system(size: 14, weight: .semibold))
@@ -178,7 +178,7 @@ struct DriverPassengerRequestsView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 40)
-            .listRowBackground(Color.clear)
+            .listRowBackground(Color.cardBackground)
         }
     }
 

@@ -84,9 +84,9 @@ final class DriverRouteScheduleViewModel: ObservableObject {
         self.upstreamBusInfoViewModel = busInfoViewModel ?? DriverBusInfoViewModel()
     }
 
-    @Published var morningOnlyPricePerMonth: String = "8500"
-    @Published var eveningOnlyPricePerMonth: String = "8500"
-    @Published var bothSessionsPricePerMonth: String = "14000"
+    @Published var morningPrice: String = ""
+    @Published var eveningPrice: String = ""
+    @Published var bothTripsPrice: String = ""
 
     @Published var submissionErrorMessage: String? = nil
 
@@ -129,8 +129,22 @@ final class DriverRouteScheduleViewModel: ObservableObject {
         !endingPoint.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
+    var isPricingValid: Bool {
+        guard let morning = Double(morningPrice),
+              let evening = Double(eveningPrice),
+              let both = Double(bothTripsPrice) else {
+            return false
+        }
+        
+        let isValidRange = { (price: Double) -> Bool in
+            price >= 5000 && price <= 15000
+        }
+        
+        return isValidRange(morning) && isValidRange(evening) && isValidRange(both) && (both < (morning + evening))
+    }
+
     var canSubmit: Bool {
-        isRouteValid && !selectedDays.isEmpty
+        isRouteValid && !selectedDays.isEmpty && isPricingValid
     }
 
     var orderedStops: [RouteStop] {
@@ -372,16 +386,20 @@ final class DriverRouteScheduleViewModel: ObservableObject {
 
             let morningScheduleEntry = RouteScheduleData(
                 scheduledDepartureTime: morningTrip.departureTime,
+                scheduledArrivalTime: morningTrip.estimatedArrivalTime,
                 activeDays: selectedDays.map { $0.rawValue }
             )
             let eveningScheduleEntry = RouteScheduleData(
                 scheduledDepartureTime: eveningTrip.departureTime,
+                scheduledArrivalTime: eveningTrip.estimatedArrivalTime,
                 activeDays: selectedDays.map { $0.rawValue }
             )
 
-            let combinedPricePerTrip = Double(bothSessionsPricePerMonth) ?? 14000.0
+            let mPrice = Double(morningPrice) ?? 0.0
+            let ePrice = Double(eveningPrice) ?? 0.0
+            let bPrice = Double(bothTripsPrice) ?? 0.0
 
-            let newRouteRecord = RouteRecord(
+            let newRouteRecord = RouteModel(
                 id: nil,
                 ownerDriverId: authenticatedUserId,
                 startLocation: RouteLocationData(
@@ -396,7 +414,10 @@ final class DriverRouteScheduleViewModel: ObservableObject {
                 ),
                 routeStops: routeStopDataList,
                 scheduleEntries: [morningScheduleEntry, eveningScheduleEntry],
-                pricePerTrip: combinedPricePerTrip,
+                morningPrice: mPrice,
+                eveningPrice: ePrice,
+                bothTripsPrice: bPrice,
+                pricePerTrip: nil,
                 routeCreatedAt: Date()
             )
 
@@ -409,7 +430,7 @@ final class DriverRouteScheduleViewModel: ObservableObject {
                 passengerCapacity: Int(upstreamBusInfoViewModel.capacity) ?? 0
             )
 
-            let newDriverRecord = DriverRecord(
+            let newDriverRecord = DriverModel(
                 id: authenticatedUserId,
                 fullName: upstreamPersonalInfoViewModel.fullName,
                 licenseNumber: upstreamPersonalInfoViewModel.licenseNumber,
@@ -420,9 +441,10 @@ final class DriverRouteScheduleViewModel: ObservableObject {
 
             try await DriverService.shared.createDriver(driverRecord: newDriverRecord)
 
-            try await UserService.shared.updateUserRole(
+            try await UserService.shared.updateUserRoleAndName(
                 userId: authenticatedUserId,
-                updatedRole: "driver"
+                updatedRole: "driver",
+                fullName: upstreamPersonalInfoViewModel.fullName
             )
 
             await AuthManager.shared.refreshUserRoleFromFirestore(userId: authenticatedUserId)

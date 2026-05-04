@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import FirebaseAuth
 
 @MainActor
 final class DriverDashboardViewModel: ObservableObject {
@@ -49,57 +50,23 @@ final class DriverDashboardViewModel: ObservableObject {
     @Published var eveningTripState: TripState = .beforeTrip
     @Published var selectedSummaryViewType: SummaryViewType = .textSummary
 
-    let driverFullName: String = "Kamal Perera"
-    let totalEnrolledPassengerCount: Int = 24
+    @Published var driverFullName: String = "Loading..."
+    @Published var totalEnrolledPassengerCount: Int = 0
+    @Published var isLoadingData: Bool = false
 
-    let morningSessionScheduledStartTime: String = "6:30 AM"
-    let morningSessionEstimatedEndTime: String = "7:45 AM"
-    let eveningSessionScheduledStartTime: String = "5:00 PM"
-    let eveningSessionEstimatedEndTime: String = "6:15 PM"
+    @Published var morningSessionScheduledStartTime: String = "Loading..."
+    @Published var morningSessionEstimatedEndTime: String = "Loading..."
+    @Published var eveningSessionScheduledStartTime: String = "Loading..."
+    @Published var eveningSessionEstimatedEndTime: String = "Loading..."
 
-    let morningAllStops: [RouteStopInfo] = [
-        RouteStopInfo(stopName: "Nugegoda Junction", passengerCount: 6, isCompleted: false),
-        RouteStopInfo(stopName: "Maharagama Town", passengerCount: 4, isCompleted: false),
-        RouteStopInfo(stopName: "Borella", passengerCount: 7, isCompleted: false),
-        RouteStopInfo(stopName: "Fort Railway Station", passengerCount: 0, isCompleted: false),
-        RouteStopInfo(stopName: "World Trade Center", passengerCount: 7, isCompleted: false),
-    ]
+    let morningAllStops: [RouteStopInfo] = []
+    let eveningAllStops: [RouteStopInfo] = []
 
-    let eveningAllStops: [RouteStopInfo] = [
-        RouteStopInfo(stopName: "World Trade Center", passengerCount: 7, isCompleted: false),
-        RouteStopInfo(stopName: "Borella", passengerCount: 7, isCompleted: false),
-        RouteStopInfo(stopName: "Maharagama Town", passengerCount: 4, isCompleted: false),
-        RouteStopInfo(stopName: "Nugegoda Junction", passengerCount: 6, isCompleted: false),
-    ]
+    let morningAttendanceStops: [AttendanceStopInfo] = []
+    let eveningAttendanceStops: [AttendanceStopInfo] = []
 
-    let morningAttendanceStops: [AttendanceStopInfo] = [
-        AttendanceStopInfo(stopName: "Nugegoda Junction", confirmedPassengerCount: 6),
-        AttendanceStopInfo(stopName: "Maharagama Town", confirmedPassengerCount: 4),
-        AttendanceStopInfo(stopName: "Borella", confirmedPassengerCount: 7),
-        AttendanceStopInfo(stopName: "Fort Railway Station", confirmedPassengerCount: 0),
-        AttendanceStopInfo(stopName: "World Trade Center", confirmedPassengerCount: 7),
-    ]
-
-    let eveningAttendanceStops: [AttendanceStopInfo] = [
-        AttendanceStopInfo(stopName: "World Trade Center", confirmedPassengerCount: 7),
-        AttendanceStopInfo(stopName: "Borella", confirmedPassengerCount: 7),
-        AttendanceStopInfo(stopName: "Maharagama Town", confirmedPassengerCount: 4),
-        AttendanceStopInfo(stopName: "Nugegoda Junction", confirmedPassengerCount: 6),
-    ]
-
-    let morningSummaryStopRecords: [TripSummaryStopRecord] = [
-        TripSummaryStopRecord(stopName: "Nugegoda Junction", arrivalTime: "6:38 AM", passengersPickedUp: 6),
-        TripSummaryStopRecord(stopName: "Maharagama Town", arrivalTime: "6:50 AM", passengersPickedUp: 4),
-        TripSummaryStopRecord(stopName: "Borella", arrivalTime: "7:10 AM", passengersPickedUp: 7),
-        TripSummaryStopRecord(stopName: "World Trade Center", arrivalTime: "7:41 AM", passengersPickedUp: 7),
-    ]
-
-    let eveningSummaryStopRecords: [TripSummaryStopRecord] = [
-        TripSummaryStopRecord(stopName: "World Trade Center", arrivalTime: "5:08 PM", passengersPickedUp: 7),
-        TripSummaryStopRecord(stopName: "Borella", arrivalTime: "5:30 PM", passengersPickedUp: 7),
-        TripSummaryStopRecord(stopName: "Maharagama Town", arrivalTime: "5:52 PM", passengersPickedUp: 4),
-        TripSummaryStopRecord(stopName: "Nugegoda Junction", arrivalTime: "6:10 PM", passengersPickedUp: 6),
-    ]
+    let morningSummaryStopRecords: [TripSummaryStopRecord] = []
+    let eveningSummaryStopRecords: [TripSummaryStopRecord] = []
 
     var currentTripState: TripState {
         selectedSessionType == .morning ? morningTripState : eveningTripState
@@ -127,11 +94,11 @@ final class DriverDashboardViewModel: ObservableObject {
     }
 
     var currentStopName: String {
-        selectedSessionType == .morning ? "Borella" : "Borella"
+        return "Unknown"
     }
 
     var nextStopName: String {
-        selectedSessionType == .morning ? "Fort Railway Station" : "Maharagama Town"
+        return "Unknown"
     }
 
     var greetingText: String {
@@ -174,5 +141,61 @@ final class DriverDashboardViewModel: ObservableObject {
 
     func selectSession(_ session: SessionType) {
         selectedSessionType = session
+    }
+
+    func fetchDriverData() {
+        guard let userId = FirebaseAuth.Auth.auth().currentUser?.uid else { return }
+
+        isLoadingData = true
+        Task {
+            do {
+                let driver = try await DriverService.shared.fetchDriver(driverId: userId)
+                self.driverFullName = driver.fullName
+                
+                do {
+                    let routeId = driver.assignedRouteId
+                    let route = try await RouteService.shared.fetchRoute(routeId: routeId)
+                    let timeFormatter = DateFormatter()
+                    timeFormatter.timeStyle = .short
+                    
+                    if route.scheduleEntries.count > 0 {
+                        let morningStr = route.scheduleEntries[0]
+                        self.morningSessionScheduledStartTime = timeFormatter.string(from: morningStr.scheduledDepartureTime)
+                        if let arr = morningStr.scheduledArrivalTime {
+                            self.morningSessionEstimatedEndTime = timeFormatter.string(from: arr)
+                        } else {
+                            self.morningSessionEstimatedEndTime = "TBD"
+                        }
+                    } else {
+                        self.morningSessionScheduledStartTime = "N/A"
+                        self.morningSessionEstimatedEndTime = "N/A"
+                    }
+                    if route.scheduleEntries.count > 1 {
+                        let eveningStr = route.scheduleEntries[1]
+                        self.eveningSessionScheduledStartTime = timeFormatter.string(from: eveningStr.scheduledDepartureTime)
+                        if let arr = eveningStr.scheduledArrivalTime {
+                            self.eveningSessionEstimatedEndTime = timeFormatter.string(from: arr)
+                        } else {
+                            self.eveningSessionEstimatedEndTime = "TBD"
+                        }
+                    } else {
+                        self.eveningSessionScheduledStartTime = "N/A"
+                        self.eveningSessionEstimatedEndTime = "N/A"
+                    }
+                } catch {
+                    print("Error fetching route for dashboard: \(error)")
+                    self.morningSessionScheduledStartTime = "Unavailable"
+                    self.morningSessionEstimatedEndTime = "Unavailable"
+                    self.eveningSessionScheduledStartTime = "Unavailable"
+                    self.eveningSessionEstimatedEndTime = "Unavailable"
+                }
+                
+                self.totalEnrolledPassengerCount = 0
+                self.isLoadingData = false
+            } catch {
+                self.driverFullName = "Unknown Driver"
+                self.isLoadingData = false
+            }
+        }
     }
 }

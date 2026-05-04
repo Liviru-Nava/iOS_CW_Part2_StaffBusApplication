@@ -9,13 +9,13 @@ import SwiftUI
 
 struct DriverPassengerManagementView: View {
 
-    @ObservedObject var profileViewModel: DriverProfileViewModel
+    @ObservedObject var driverProfileViewModel: DriverProfileViewModel
 
     var body: some View {
         List {
             statsSection
             filterPickerSection
-            if profileViewModel.selectedPassengerFilterType == .active {
+            if driverProfileViewModel.selectedPassengerFilterType == .active {
                 activePassengersSection
             } else {
                 inactivePassengersSection
@@ -32,25 +32,25 @@ struct DriverPassengerManagementView: View {
         Section {
             HStack(spacing: 0) {
                 statCell(
-                    value: "\(profileViewModel.activePassengersList.count)",
+                    value: "\(driverProfileViewModel.activePassengersList.count)",
                     label: "Active",
                     valueColor: .statusActive
                 )
                 Divider().frame(height: 36)
                 statCell(
-                    value: "\(profileViewModel.inactivePassengersList.count)",
+                    value: "\(driverProfileViewModel.inactivePassengersList.count)",
                     label: "Inactive",
                     valueColor: .statusInactive
                 )
                 Divider().frame(height: 36)
                 statCell(
-                    value: "\(profileViewModel.activePassengersList.filter { $0.currentPaymentStatus == .paid }.count)",
+                    value: "\(driverProfileViewModel.activePassengersList.filter { $0.currentPaymentStatus == .paid }.count)",
                     label: "Paid",
                     valueColor: .statusActive
                 )
                 Divider().frame(height: 36)
                 statCell(
-                    value: "\(profileViewModel.activePassengersList.filter { $0.currentPaymentStatus == .pending }.count)",
+                    value: "\(driverProfileViewModel.activePassengersList.filter { $0.currentPaymentStatus == .pending }.count)",
                     label: "Pending",
                     valueColor: .statusWarning
                 )
@@ -74,7 +74,7 @@ struct DriverPassengerManagementView: View {
 
     private var filterPickerSection: some View {
         Section {
-            Picker("Passenger Filter", selection: $profileViewModel.selectedPassengerFilterType) {
+            Picker("Passenger Filter", selection: $driverProfileViewModel.selectedPassengerFilterType) {
                 ForEach(DriverProfileViewModel.PassengerFilterType.allCases) { filterType in
                     Text(filterType.rawValue).tag(filterType)
                 }
@@ -87,31 +87,31 @@ struct DriverPassengerManagementView: View {
 
     private var activePassengersSection: some View {
         Section {
-            if profileViewModel.activePassengersList.isEmpty {
+            if driverProfileViewModel.activePassengersList.isEmpty {
                 emptyRow(message: "No active passengers", iconName: "person.slash")
             } else {
-                ForEach(profileViewModel.activePassengersList) { passenger in
+                ForEach(driverProfileViewModel.activePassengersList) { passenger in
                     activePassengerRow(passenger: passenger)
                         .listRowBackground(Color.cardBackground)
                 }
             }
         } header: {
-            Text("Active Passengers (\(profileViewModel.activePassengersList.count))")
+            Text("Active Passengers (\(driverProfileViewModel.activePassengersList.count))")
         }
     }
 
     private var inactivePassengersSection: some View {
         Section {
-            if profileViewModel.inactivePassengersList.isEmpty {
+            if driverProfileViewModel.inactivePassengersList.isEmpty {
                 emptyRow(message: "No inactive passengers", iconName: "checkmark.circle")
             } else {
-                ForEach(profileViewModel.inactivePassengersList) { passenger in
+                ForEach(driverProfileViewModel.inactivePassengersList) { passenger in
                     inactivePassengerRow(passenger: passenger)
                         .listRowBackground(Color.cardBackground)
                 }
             }
         } header: {
-            Text("Inactive Passengers (\(profileViewModel.inactivePassengersList.count))")
+            Text("Inactive Passengers (\(driverProfileViewModel.inactivePassengersList.count))")
         }
     }
 
@@ -154,7 +154,7 @@ struct DriverPassengerManagementView: View {
                     .clipShape(Capsule())
 
                 Button {
-                    profileViewModel.terminateActivePassenger(passengerIdentifier: passenger.id)
+                    driverProfileViewModel.terminateActivePassenger(passengerIdentifier: passenger.id)
                 } label: {
                     Text("Remove")
                         .font(.system(size: 11, weight: .medium))

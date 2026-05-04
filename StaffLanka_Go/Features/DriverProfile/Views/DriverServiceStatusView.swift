@@ -9,7 +9,7 @@ import SwiftUI
 
 struct DriverServiceStatusView: View {
 
-    @ObservedObject var profileViewModel: DriverProfileViewModel
+    @ObservedObject var driverProfileViewModel: DriverProfileViewModel
 
     var body: some View {
         List {
@@ -29,18 +29,18 @@ struct DriverServiceStatusView: View {
             HStack(spacing: 16) {
                 ZStack {
                     Circle()
-                        .fill(profileViewModel.driverAvailabilityStatusIsOnline ? Color.statusActive.opacity(0.15) : Color.statusInactive.opacity(0.12))
+                        .fill(driverProfileViewModel.driverAvailabilityStatusIsOnline ? Color.statusActive.opacity(0.15) : Color.statusInactive.opacity(0.12))
                         .frame(width: 64, height: 64)
-                    Image(systemName: profileViewModel.driverAvailabilityStatusIsOnline ? "antenna.radiowaves.left.and.right" : "antenna.radiowaves.left.and.right.slash")
+                    Image(systemName: driverProfileViewModel.driverAvailabilityStatusIsOnline ? "antenna.radiowaves.left.and.right" : "antenna.radiowaves.left.and.right.slash")
                         .font(.system(size: 26))
-                        .foregroundColor(profileViewModel.driverAvailabilityStatusIsOnline ? .statusActive : .statusInactive)
+                        .foregroundColor(driverProfileViewModel.driverAvailabilityStatusIsOnline ? .statusActive : .statusInactive)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(profileViewModel.driverAvailabilityStatusIsOnline ? "Currently Online" : "Currently Offline")
+                    Text(driverProfileViewModel.driverAvailabilityStatusIsOnline ? "Currently Online" : "Currently Offline")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.textPrimary)
-                    Text(profileViewModel.driverAvailabilityStatusIsOnline
+                    Text(driverProfileViewModel.driverAvailabilityStatusIsOnline
                          ? "Passengers can see your route and book trips."
                          : "Your route is hidden from passengers.")
                         .font(.system(size: 13))
@@ -55,17 +55,17 @@ struct DriverServiceStatusView: View {
 
     private var togglesSection: some View {
         Section {
-            Toggle(isOn: $profileViewModel.driverAvailabilityStatusIsOnline) {
+            Toggle(isOn: $driverProfileViewModel.driverAvailabilityStatusIsOnline) {
                 HStack(spacing: 12) {
                     profileIconBadge(
                         systemIconName: "wifi",
-                        badgeColor: profileViewModel.driverAvailabilityStatusIsOnline ? .statusActive : .statusInactive
+                        badgeColor: driverProfileViewModel.driverAvailabilityStatusIsOnline ? .statusActive : .statusInactive
                     )
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Online Status")
                             .font(.system(size: 15))
                             .foregroundColor(.textPrimary)
-                        Text(profileViewModel.driverAvailabilityStatusIsOnline ? "Active – visible to passengers" : "Inactive – hidden from passengers")
+                        Text(driverProfileViewModel.driverAvailabilityStatusIsOnline ? "Active – visible to passengers" : "Inactive – hidden from passengers")
                             .font(.system(size: 12))
                             .foregroundColor(.textSecondary)
                     }
@@ -74,17 +74,17 @@ struct DriverServiceStatusView: View {
             .tint(Color.statusActive)
             .listRowBackground(Color.cardBackground)
 
-            Toggle(isOn: $profileViewModel.driverAcceptingRequestsState) {
+            Toggle(isOn: $driverProfileViewModel.driverAcceptingRequestsState) {
                 HStack(spacing: 12) {
                     profileIconBadge(
                         systemIconName: "person.badge.plus",
-                        badgeColor: profileViewModel.driverAcceptingRequestsState ? .brandAccent : .statusInactive
+                        badgeColor: driverProfileViewModel.driverAcceptingRequestsState ? .brandAccent : .statusInactive
                     )
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Accepting Join Requests")
                             .font(.system(size: 15))
                             .foregroundColor(.textPrimary)
-                        Text(profileViewModel.driverAcceptingRequestsState ? "New passengers can request to join" : "No new requests will be received")
+                        Text(driverProfileViewModel.driverAcceptingRequestsState ? "New passengers can request to join" : "No new requests will be received")
                             .font(.system(size: 12))
                             .foregroundColor(.textSecondary)
                     }
