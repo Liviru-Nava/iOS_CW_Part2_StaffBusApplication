@@ -10,7 +10,7 @@ import MapKit
 
 struct RouteDetailView: View {
 
-    let route: BusRoute
+    let route: PassengerRouteResult
     let pickupLocation: String
     let destinationLocation: String
 
@@ -20,7 +20,7 @@ struct RouteDetailView: View {
     @State private var showAllReviews = false
     @State private var showFullMap = false
 
-    init(route: BusRoute, pickupLocation: String, destinationLocation: String) {
+    init(route: PassengerRouteResult, pickupLocation: String, destinationLocation: String) {
         self.route = route
         self.pickupLocation = pickupLocation
         self.destinationLocation = destinationLocation
@@ -64,24 +64,29 @@ struct RouteDetailView: View {
         }
         .sheet(isPresented: $showJoinSheet) {
             JoinRequestView(
-                pickupLocation: pickupLocation,
+                pickupLocation:      pickupLocation,
                 destinationLocation: destinationLocation,
-                routeName: route.routeName
+                routeName:           route.routeName,
+                routeId:             route.id,
+                driverId:            route.driverId,
+                stops:               routeDetailViewModel.mapStops.map { $0.name }
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(20)
         }
         .sheet(isPresented: $showAllReviews) {
-            AllReviewsSheet(rating: route.rating)
+            AllReviewsSheet()
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(20)
         }
         .fullScreenCover(isPresented: $showFullMap) {
-            FullRouteMapView(route: route, tripType: routeDetailViewModel.selectedTrip)
+            FullRouteMapView(stops: routeDetailViewModel.mapStops, tripType: routeDetailViewModel.selectedTrip)
         }
     }
+
+    // Main scroll content
 
     private var mainScrollContent: some View {
         ScrollView(showsIndicators: false) {
@@ -89,6 +94,7 @@ struct RouteDetailView: View {
                 mapSection
                 driverVehicleSection
                 tripDetailsSection
+                pricingSection
                 stopsSection
                 reviewsSection
                 Color.clear.frame(height: 20)
@@ -99,14 +105,12 @@ struct RouteDetailView: View {
         }
     }
 
+    // Map section
+
     private var mapSection: some View {
-        let stops = route.stops.compactMap { stop -> MapStop? in
-            guard let coord = routeDetailViewModel.coordinate(for: stop) else { return nil }
-            return MapStop(id: stop, name: stop, coordinate: coord)
-        }
-        return ZStack(alignment: .bottomTrailing) {
+        ZStack(alignment: .bottomTrailing) {
             Map {
-                ForEach(stops) { stop in
+                ForEach(routeDetailViewModel.mapStops) { stop in
                     Annotation(stop.name, coordinate: stop.coordinate) {
                         ZStack {
                             Circle()
@@ -143,70 +147,68 @@ struct RouteDetailView: View {
         }
     }
 
+    // Driver & vehicle section
+
     private var driverVehicleSection: some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(LinearGradient.brand)
-                        .frame(width: 52, height: 52)
-                    Text(String(route.driverName.prefix(2)).uppercased())
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(Color.white)
-                }
+                // Driver avatar — show photo if available, otherwise initials
+                driverAvatar
+                    .frame(width: 52, height: 52)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(route.driverName)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Color.textPrimary)
                     HStack(spacing: 4) {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Color.statusWarning)
-                        Text(String(format: "%.1f", route.rating))
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Color.textPrimary)
-                        Text("rating")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color.textSecondary)
+                        Image(systemName: route.isAcceptingRequests ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(route.isAcceptingRequests ? Color.statusActive : Color.statusDanger)
+                        Text(route.isAcceptingRequests ? "Accepting Requests" : "Not Accepting")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(route.isAcceptingRequests ? Color.statusActive : Color.statusDanger)
                     }
                 }
 
                 Spacer()
-
-                Button {
-                    let cleaned = route.driverPhone.replacingOccurrences(of: " ", with: "")
-                    if let url = URL(string: "tel://\(cleaned)"),
-                       UIApplication.shared.canOpenURL(url) {
-                        UIApplication.shared.open(url)
-                    }
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(Color.statusActive.opacity(0.12))
-                            .frame(width: 44, height: 44)
-                        Image(systemName: "phone.fill")
-                            .font(.system(size: 16))
-                            .foregroundStyle(Color.statusActive)
-                    }
-                }
-                .buttonStyle(.plain)
             }
             .padding(16)
 
             Divider().padding(.horizontal, 16)
 
             VStack(spacing: 0) {
-                infoRow(label: "Vehicle", value: "\(route.vehicleBrand) \(route.vehicleType)")
+                infoRow(label: "Bus Name",    value: route.busName)
                 Divider().padding(.leading, 16)
-                infoRow(label: "License Plate", value: route.busNumber)
+                infoRow(label: "Vehicle Type", value: route.busType)
                 Divider().padding(.leading, 16)
-                infoRow(label: "Capacity", value: "\(route.currentPassengers)/\(route.capacity) seats")
+                infoRow(label: "License Plate", value: route.plateNumber)
+                Divider().padding(.leading, 16)
+                infoRow(label: "Capacity",    value: "\(route.capacity) seats")
             }
         }
         .background(Color.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.divider, lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private var driverAvatar: some View {
+        if let base64 = route.profilePhotoBase64,
+           let imageData = Data(base64Encoded: base64, options: .ignoreUnknownCharacters),
+           let uiImage = UIImage(data: imageData) {
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFill()
+                .clipShape(Circle())
+        } else {
+            ZStack {
+                Circle()
+                    .fill(LinearGradient.brand)
+                Text(routeDetailViewModel.driverInitials)
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(Color.white)
+            }
+        }
     }
 
     private func infoRow(label: String, value: String) -> some View {
@@ -223,6 +225,8 @@ struct RouteDetailView: View {
         .padding(.vertical, 13)
     }
 
+    // Trip schedule section
+
     private var tripDetailsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Service Schedule")
@@ -230,8 +234,29 @@ struct RouteDetailView: View {
                 .foregroundStyle(Color.textPrimary)
 
             HStack(spacing: 12) {
-                scheduleCell(icon: "sunrise.fill", iconColor: Color.statusWarning, label: "Morning", time: routeDetailViewModel.morningSchedule)
-                scheduleCell(icon: "moon.fill", iconColor: Color.brandAccent, label: "Evening", time: routeDetailViewModel.eveningSchedule)
+                scheduleCell(
+                    icon: "sunrise.fill",
+                    iconColor: Color.statusWarning,
+                    label: "Morning",
+                    time: routeDetailViewModel.morningSchedule
+                )
+                scheduleCell(
+                    icon: "moon.fill",
+                    iconColor: Color.brandAccent,
+                    label: "Evening",
+                    time: routeDetailViewModel.eveningSchedule
+                )
+            }
+
+            if !route.activeDays.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.textTertiary)
+                    Text(routeDetailViewModel.activeDaysLabel)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.textSecondary)
+                }
             }
         }
     }
@@ -259,6 +284,47 @@ struct RouteDetailView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.divider, lineWidth: 1))
     }
 
+    // Pricing section
+
+    private var pricingSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Trip Pricing (LKR)")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.textPrimary)
+
+            VStack(spacing: 0) {
+                priceRow(label: "Morning Trip", value: routeDetailViewModel.morningPriceLabel, icon: "sunrise.fill", iconColor: Color.statusWarning)
+                Divider().padding(.leading, 16)
+                priceRow(label: "Evening Trip", value: routeDetailViewModel.eveningPriceLabel, icon: "moon.fill", iconColor: Color.brandAccent)
+                Divider().padding(.leading, 16)
+                priceRow(label: "Both Trips (Daily)", value: routeDetailViewModel.bothPriceLabel, icon: "arrow.triangle.2.circlepath", iconColor: Color.statusActive)
+            }
+            .background(Color.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.divider, lineWidth: 1))
+        }
+    }
+
+    private func priceRow(label: String, value: String, icon: String, iconColor: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 13))
+                .foregroundStyle(iconColor)
+                .frame(width: 20)
+            Text(label)
+                .font(.system(size: 14))
+                .foregroundStyle(Color.textSecondary)
+            Spacer()
+            Text(value)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.textPrimary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+    }
+
+    // Stops section
+
     private var stopsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Route Stops")
@@ -266,7 +332,8 @@ struct RouteDetailView: View {
                 .foregroundStyle(Color.textPrimary)
 
             VStack(spacing: 0) {
-                ForEach(Array(route.stops.enumerated()), id: \.offset) { index, stop in
+                let allStops = routeDetailViewModel.mapStops
+                ForEach(Array(allStops.enumerated()), id: \.element.id) { index, stop in
                     HStack(spacing: 14) {
                         VStack(spacing: 0) {
                             if index == 0 {
@@ -278,7 +345,7 @@ struct RouteDetailView: View {
                             }
 
                             ZStack {
-                                if index == 0 || index == route.stops.count - 1 {
+                                if index == 0 || index == allStops.count - 1 {
                                     Circle()
                                         .fill(Color.brandAccent)
                                         .frame(width: 12, height: 12)
@@ -289,7 +356,7 @@ struct RouteDetailView: View {
                                 }
                             }
 
-                            if index < route.stops.count - 1 {
+                            if index < allStops.count - 1 {
                                 Rectangle()
                                     .fill(Color.brandAccent.opacity(0.3))
                                     .frame(width: 2, height: 10)
@@ -299,14 +366,20 @@ struct RouteDetailView: View {
                         }
                         .frame(width: 20)
 
-                        Text(stop)
-                            .font(.system(size: index == 0 || index == route.stops.count - 1 ? 14 : 13,
-                                         weight: index == 0 || index == route.stops.count - 1 ? .semibold : .regular))
-                            .foregroundStyle(index == 0 || index == route.stops.count - 1 ? Color.textPrimary : Color.textSecondary)
+                        Text(stop.name)
+                            .font(.system(
+                                size: index == 0 || index == allStops.count - 1 ? 14 : 13,
+                                weight: index == 0 || index == allStops.count - 1 ? .semibold : .regular
+                            ))
+                            .foregroundStyle(
+                                index == 0 || index == allStops.count - 1
+                                    ? Color.textPrimary
+                                    : Color.textSecondary
+                            )
 
                         Spacer()
 
-                        if stop == pickupLocation {
+                        if stop.name == pickupLocation {
                             Text("Your Pickup")
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(Color.statusActive)
@@ -314,7 +387,7 @@ struct RouteDetailView: View {
                                 .padding(.vertical, 3)
                                 .background(Color.statusActive.opacity(0.12))
                                 .clipShape(Capsule())
-                        } else if stop == destinationLocation {
+                        } else if stop.name == destinationLocation {
                             Text("Your Drop-off")
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(Color.brandAccent)
@@ -334,52 +407,52 @@ struct RouteDetailView: View {
         }
     }
 
+    // Reviews section
+
     private var reviewsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Passenger Reviews")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.textPrimary)
-                Spacer()
-                Button {
-                    showAllReviews = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Color.statusWarning)
-                        Text(String(format: "%.1f", route.rating))
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Color.textPrimary)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.textTertiary)
-                    }
-                }
-                .buttonStyle(.plain)
-            }
+            Text("Passenger Reviews")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.textPrimary)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ReviewCard(name: "Kamal P.", rating: 5, date: "2 days ago", comment: "Great driver, always on time and safe driving.")
-                    ReviewCard(name: "Sarah W.", rating: 4, date: "1 week ago", comment: "Comfortable seats. AC could be slightly cooler.")
-                    ReviewCard(name: "Nuwan J.", rating: 5, date: "3 weeks ago", comment: "Very reliable daily commute. Highly recommended!")
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color.statusWarning.opacity(0.12))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "star.slash.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.statusWarning)
                 }
-                .padding(.horizontal, 2)
-                .padding(.vertical, 2)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("No Reviews Yet")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.textPrimary)
+                    Text("This driver hasn't received any reviews from passengers yet.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.textSecondary)
+                }
+                Spacer()
             }
+            .padding(14)
+            .background(Color.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.divider, lineWidth: 1))
         }
     }
+
+    // Bottom bar
 
     private var bottomBar: some View {
         VStack(spacing: 0) {
             Divider().background(Color.divider)
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Monthly Fee")
+                    Text("Both Trips / Day")
                         .font(.system(size: 11))
                         .foregroundStyle(Color.textTertiary)
-                    Text("Rs. \(Int(route.estimatedMonthlyCost))")
+                    Text(routeDetailViewModel.bothPriceLabel)
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(Color.textPrimary)
                 }
@@ -398,19 +471,20 @@ struct RouteDetailView: View {
                     .foregroundStyle(Color.brandPrimary)
                     .padding(.horizontal, 22)
                     .padding(.vertical, 14)
-                    .background(route.availableSeats > 0 ? Color.brandAccent : Color.statusInactive)
+                    .background(route.isAcceptingRequests ? Color.brandAccent : Color.statusInactive)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
                 .buttonStyle(.plain)
-                .disabled(route.availableSeats == 0)
+                .disabled(!route.isAcceptingRequests)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
             .background(Color.appBackground)
         }
     }
-
 }
+
+// Review Card
 
 struct ReviewCard: View {
     let name: String
@@ -460,13 +534,14 @@ struct ReviewCard: View {
     }
 }
 
+ //All Reviews Sheet
+
 struct AllReviewsSheet: View {
-    let rating: Double
     @Environment(\.dismiss) private var dismiss
 
     private let reviews: [(name: String, rating: Int, date: String, comment: String)] = [
-        ("Kamal P.", 5, "2 days ago", "Great driver, always on time and safe driving. Highly recommend this service for anyone commuting to Colombo."),
-        ("Sarah W.", 4, "1 week ago", "Comfortable seats. AC could be slightly cooler sometimes, but overall a decent experience."),
+        ("Kamal P.", 5, "2 days ago", "Great driver, always on time and safe driving. Highly recommend this service."),
+        ("Sarah W.", 4, "1 week ago", "Comfortable seats. AC could be slightly cooler sometimes, but overall decent."),
         ("Nuwan J.", 5, "3 weeks ago", "Very reliable daily commute. Doesn't miss any stops and communicates delays."),
         ("Amila D.", 5, "1 month ago", "Excellent service. The bus is always clean."),
         ("Kasun M.", 3, "2 months ago", "Good, but sometimes arrives 5 mins late."),
@@ -478,14 +553,13 @@ struct AllReviewsSheet: View {
                 Color.appBackground.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 20) {
-                        ratingHeader
                         reviewsList
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 24)
                 }
             }
-            .navigationTitle("All Reviews")
+            .navigationTitle("Passenger Reviews")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -494,28 +568,6 @@ struct AllReviewsSheet: View {
                 }
             }
         }
-    }
-
-    private var ratingHeader: some View {
-        VStack(spacing: 8) {
-            Text(String(format: "%.1f", rating))
-                .font(.system(size: 52, weight: .bold))
-                .foregroundStyle(Color.textPrimary)
-            HStack(spacing: 4) {
-                ForEach(0..<5, id: \.self) { i in
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(i < Int(rating) ? Color.statusWarning : Color.divider)
-                }
-            }
-            Text("Based on passenger feedback")
-                .font(.system(size: 13))
-                .foregroundStyle(Color.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
-        .background(Color.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 
     private var reviewsList: some View {
@@ -566,32 +618,12 @@ struct AllReviewsSheet: View {
     }
 }
 
+ //Full Route Map View
+
 struct FullRouteMapView: View {
-    let route: BusRoute
+    let stops: [PassengerStop]
     let tripType: RouteDetailViewModel.TripType
     @Environment(\.dismiss) private var dismiss
-
-    private let coords: [String: CLLocationCoordinate2D] = [
-        "Colombo Fort": CLLocationCoordinate2D(latitude: 6.9344, longitude: 79.8428),
-        "Pettah Bus Stand": CLLocationCoordinate2D(latitude: 6.9355, longitude: 79.8503),
-        "Maradana": CLLocationCoordinate2D(latitude: 6.9271, longitude: 79.8612),
-        "Borella": CLLocationCoordinate2D(latitude: 6.9147, longitude: 79.8774),
-        "Nugegoda": CLLocationCoordinate2D(latitude: 6.8728, longitude: 79.8889),
-        "Maharagama": CLLocationCoordinate2D(latitude: 6.8484, longitude: 79.9266),
-        "Battaramulla": CLLocationCoordinate2D(latitude: 6.9046, longitude: 79.9196),
-        "Rajagiriya": CLLocationCoordinate2D(latitude: 6.9050, longitude: 79.8960),
-        "Kottawa": CLLocationCoordinate2D(latitude: 6.8380, longitude: 79.9680),
-        "Kaduwela": CLLocationCoordinate2D(latitude: 6.9284, longitude: 79.9803),
-        "Malabe": CLLocationCoordinate2D(latitude: 6.9063, longitude: 79.9726),
-        "Athurugiriya": CLLocationCoordinate2D(latitude: 6.8787, longitude: 79.9913),
-    ]
-
-    var mapStops: [MapStop] {
-        route.stops.compactMap { stop in
-            guard let coord = coords[stop] else { return nil }
-            return MapStop(id: stop, name: stop, coordinate: coord)
-        }
-    }
 
     var navTitle: String {
         tripType == .morning ? "Morning Route" : "Evening Route"
@@ -600,7 +632,7 @@ struct FullRouteMapView: View {
     var body: some View {
         NavigationStack {
             Map {
-                ForEach(mapStops) { stop in
+                ForEach(stops) { stop in
                     Annotation(stop.name, coordinate: stop.coordinate) {
                         VStack(spacing: 2) {
                             Text(stop.name)
@@ -635,66 +667,45 @@ struct FullRouteMapView: View {
     }
 }
 
+ //MapStop (kept for compatibility with existing code references)
 struct MapStop: Identifiable {
     let id: String
     let name: String
     let coordinate: CLLocationCoordinate2D
 }
 
+// Preview
+
 #Preview("Dark") {
+    let sampleStop = PassengerStop(
+        id: "start",
+        name: "Sample Start",
+        coordinate: CLLocationCoordinate2D(latitude: 6.9271, longitude: 79.8612)
+    )
+    let sampleRoute = PassengerRouteResult(
+        id: "preview",
+        driverId: "driver1",
+        driverName: "K. Perera",
+        plateNumber: "SL-B 1384",
+        busName: "Toyota Bus",
+        busType: "Large Bus",
+        capacity: 40,
+        isAcceptingRequests: true,
+        origin: "Colombo Fort",
+        destination: "Maharagama",
+        stops: [sampleStop],
+        morningDeparture: Calendar.current.date(bySettingHour: 6, minute: 30, second: 0, of: Date()) ?? Date(),
+        morningArrival:   Calendar.current.date(bySettingHour: 7, minute: 45, second: 0, of: Date()) ?? Date(),
+        eveningDeparture: Calendar.current.date(bySettingHour: 17, minute: 30, second: 0, of: Date()) ?? Date(),
+        eveningArrival:   Calendar.current.date(bySettingHour: 18, minute: 45, second: 0, of: Date()) ?? Date(),
+        activeDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        morningPrice: 7500,
+        eveningPrice: 7500,
+        bothTripsPrice: 12000,
+        profilePhotoBase64: nil
+    )
     NavigationStack {
-        RouteDetailView(
-            route: BusRoute(
-                busNumber: "SL-B 1384",
-                routeName: "Colombo Fort → Maharagama",
-                origin: "Colombo Fort",
-                destination: "Maharagama",
-                driverName: "K. Perera",
-                driverPhone: "+94 77 111 2222",
-                vehicleBrand: "Ashok Leyland",
-                vehicleType: "Bus",
-                capacity: 40,
-                currentPassengers: 32,
-                rating: 4.3,
-                morningStartTime: "06:30 AM",
-                morningEndTime: "07:45 AM",
-                eveningStartTime: "05:30 PM",
-                eveningEndTime: "06:45 PM",
-                estimatedMonthlyCost: 3500,
-                stops: ["Colombo Fort", "Pettah Bus Stand", "Maradana", "Borella", "Nugegoda", "Maharagama"]
-            ),
-            pickupLocation: "Borella",
-            destinationLocation: "Maharagama"
-        )
+        RouteDetailView(route: sampleRoute, pickupLocation: "Colombo Fort", destinationLocation: "Maharagama")
     }
     .preferredColorScheme(.dark)
-}
-
-#Preview("Light") {
-    NavigationStack {
-        RouteDetailView(
-            route: BusRoute(
-                busNumber: "SL-B 1384",
-                routeName: "Colombo Fort → Maharagama",
-                origin: "Colombo Fort",
-                destination: "Maharagama",
-                driverName: "K. Perera",
-                driverPhone: "+94 77 111 2222",
-                vehicleBrand: "Ashok Leyland",
-                vehicleType: "Bus",
-                capacity: 40,
-                currentPassengers: 32,
-                rating: 4.3,
-                morningStartTime: "06:30 AM",
-                morningEndTime: "07:45 AM",
-                eveningStartTime: "05:30 PM",
-                eveningEndTime: "06:45 PM",
-                estimatedMonthlyCost: 3500,
-                stops: ["Colombo Fort", "Pettah Bus Stand", "Maradana", "Borella", "Nugegoda", "Maharagama"]
-            ),
-            pickupLocation: "Borella",
-            destinationLocation: "Maharagama"
-        )
-    }
-    .preferredColorScheme(.light)
 }

@@ -27,9 +27,14 @@ struct DriverDashboardView: View {
         .ignoresSafeArea(edges: .top)
         .onAppear {
             dashboardViewModel.fetchDriverData()
+            NotificationManager.shared.requestPermissions()
         }
         .fullScreenCover(isPresented: $showRouteMapFullScreen) {
-            RouteMapFullscreenView(isPresented: $showRouteMapFullScreen, sessionType: dashboardViewModel.selectedSessionType)
+            RouteMapFullscreenView(
+                isPresented: $showRouteMapFullScreen,
+                sessionType: dashboardViewModel.selectedSessionType,
+                routeData: dashboardViewModel.fetchedRouteData
+            )
         }
     }
 
@@ -56,7 +61,8 @@ struct DriverDashboardView: View {
                 Spacer()
 
                 ZStack(alignment: .topTrailing) {
-                    Button {
+                    NavigationLink {
+                        DriverNotificationsView()
                     } label: {
                         Image(systemName: "bell.fill")
                             .font(.system(size: 17, weight: .medium))
@@ -311,7 +317,7 @@ struct DriverDashboardView: View {
                 .padding(.vertical, 14)
                 .background(
                     LinearGradient(
-                        colors: [Color.statusActive.opacity(0.85), Color.statusActive],
+                        colors: dashboardViewModel.isNearEndingLocation ? [Color.statusActive.opacity(0.85), Color.statusActive] : [Color.gray.opacity(0.5), Color.gray],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -319,6 +325,7 @@ struct DriverDashboardView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .buttonStyle(.plain)
+            .disabled(!dashboardViewModel.isNearEndingLocation)
         }
         .padding(18)
         .background(Color.cardBackground)
@@ -760,10 +767,9 @@ struct DriverDashboardView: View {
 struct RouteMapFullscreenView: View {
     @Binding var isPresented: Bool
     var sessionType: DriverDashboardViewModel.SessionType
-    @State private var mapRegion = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 6.9271, longitude: 79.8612),
-        span: MKCoordinateSpan(latitudeDelta: 0.2, longitudeDelta: 0.2)
-    )
+    var routeData: RouteModel?
+
+    @State private var routePolyline: MKPolyline?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -771,45 +777,39 @@ struct RouteMapFullscreenView: View {
                 Rectangle()
                     .fill(Color.appBackground)
                     .ignoresSafeArea()
-                VStack(spacing: 18) {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.surfaceBackground)
-                        .frame(height: 280)
-                        .overlay(
-                            VStack(spacing: 12) {
-                                Image(systemName: "map.fill")
-                                    .font(.system(size: 48))
-                                    .foregroundStyle(Color.brandAccent)
-                                Text("Route Map Preview")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(Color.textPrimary)
-                                Text("This is a fullscreen placeholder map. Replace with MapKit when needed.")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(Color.textTertiary)
-                            }
-                            .padding(24)
-                        )
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(mockAnnotations) { item in
-                            HStack(spacing: 10) {
-                                Circle().fill(item.tint).frame(width: 10, height: 10)
-                                Text(item.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.textPrimary)
-                                Spacer()
+                Map {
+                    UserAnnotation()
+
+                    if let routePolyline = routePolyline {
+                        MapPolyline(routePolyline)
+                            .stroke(Color.brandAccent, lineWidth: 5)
+                    }
+
+                    if let route = routeData {
+                        Annotation(route.startLocation.locationName, coordinate: CLLocationCoordinate2D(latitude: route.startLocation.latitude, longitude: route.startLocation.longitude)) {
+                            Image(systemName: "flag.fill").foregroundColor(.green)
+                        }
+
+                        ForEach(route.routeStops, id: \.stopName) { stop in
+                            Annotation(stop.stopName, coordinate: CLLocationCoordinate2D(latitude: stop.latitude, longitude: stop.longitude)) {
+                                Circle().fill(Color.brandAccent).frame(width: 10, height: 10)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.cardBackground)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+
+                        Annotation(route.endLocation.locationName, coordinate: CLLocationCoordinate2D(latitude: route.endLocation.latitude, longitude: route.endLocation.longitude)) {
+                            Image(systemName: "flag.checkered.circle.fill").foregroundColor(.red)
                         }
                     }
-                    .padding(.horizontal, 16)
-
-                    Spacer()
                 }
-                .padding(.top, 80)
+                .edgesIgnoringSafeArea(.all)
+                .task {
+                    await calculateDirections()
+                }
+
             }
 
+            // Close button overlay
             HStack {
                 Spacer()
                 Button {
@@ -829,26 +829,31 @@ struct RouteMapFullscreenView: View {
         }
     }
 
-    private var mockAnnotations: [MapAnnotationItem] {
-        if sessionType == .morning {
-            return [
-                MapAnnotationItem(coordinate: CLLocationCoordinate2D(latitude: 6.8936, longitude: 79.9009), title: "Nugegoda Junction", tint: .brandAccent),
-                MapAnnotationItem(coordinate: CLLocationCoordinate2D(latitude: 6.8400, longitude: 79.9308), title: "Maharagama Town", tint: .brandAccent),
-                MapAnnotationItem(coordinate: CLLocationCoordinate2D(latitude: 6.9271, longitude: 79.8612), title: "Fort Railway Station", tint: .brandAccent),
-            ]
-        } else {
-            return [
-                MapAnnotationItem(coordinate: CLLocationCoordinate2D(latitude: 6.9271, longitude: 79.8612), title: "World Trade Center", tint: .brandAccent),
-                MapAnnotationItem(coordinate: CLLocationCoordinate2D(latitude: 6.9279, longitude: 79.8572), title: "Borella", tint: .brandAccent),
-            ]
-        }
-    }
+    private func calculateDirections() async {
+        guard let route = routeData else { return }
 
-    struct MapAnnotationItem: Identifiable {
-        let id = UUID()
-        let coordinate: CLLocationCoordinate2D
-        let title: String
-        let tint: Color
+        let startLocation = CLLocation(latitude: route.startLocation.latitude, longitude: route.startLocation.longitude)
+        let endLocation = CLLocation(latitude: route.endLocation.latitude, longitude: route.endLocation.longitude)
+
+        let request = MKDirections.Request()
+        
+        let startPlacemark = MKPlacemark(coordinate: startLocation.coordinate)
+        let endPlacemark = MKPlacemark(coordinate: endLocation.coordinate)
+        
+        
+        request.source = MKMapItem(placemark: startPlacemark)
+        request.destination = MKMapItem(placemark: endPlacemark)
+        request.transportType = .automobile
+
+        do {
+            let directions = MKDirections(request: request)
+            let response = try await directions.calculate()
+            if let firstRoute = response.routes.first {
+                self.routePolyline = firstRoute.polyline
+            }
+        } catch {
+            print("Failed to calculate polyline route: \(error.localizedDescription)")
+        }
     }
 }
 

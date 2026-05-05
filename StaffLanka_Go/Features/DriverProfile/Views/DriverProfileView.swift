@@ -209,10 +209,11 @@ struct DriverProfileView: View {
             .buttonStyle(.plain)
             .listRowBackground(Color.cardBackground)
 
-            Button {} label: {
+            NavigationLink {
+                DriverNotificationSettingsView()
+            } label: {
                 profileListRow(iconName: "bell.badge.fill", iconBadgeColor: Color.statusWarning, rowTitle: "Notification Settings", rowSubtitle: nil)
             }
-            .buttonStyle(.plain)
             .listRowBackground(Color.cardBackground)
 
             Button {} label: {

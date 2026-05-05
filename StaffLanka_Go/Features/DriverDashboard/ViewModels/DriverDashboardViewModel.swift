@@ -9,9 +9,11 @@ import Foundation
 import SwiftUI
 import Combine
 import FirebaseAuth
+import CoreLocation
+import MapKit
 
 @MainActor
-final class DriverDashboardViewModel: ObservableObject {
+final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     enum SessionType: CaseIterable, Hashable {
         case morning, evening
@@ -58,6 +60,8 @@ final class DriverDashboardViewModel: ObservableObject {
     @Published var morningSessionEstimatedEndTime: String = "Loading..."
     @Published var eveningSessionScheduledStartTime: String = "Loading..."
     @Published var eveningSessionEstimatedEndTime: String = "Loading..."
+    
+    @Published var fetchedRouteData: RouteModel?
 
     let morningAllStops: [RouteStopInfo] = []
     let eveningAllStops: [RouteStopInfo] = []
@@ -67,6 +71,34 @@ final class DriverDashboardViewModel: ObservableObject {
 
     let morningSummaryStopRecords: [TripSummaryStopRecord] = []
     let eveningSummaryStopRecords: [TripSummaryStopRecord] = []
+
+    // Core Location variables
+    private var locationManager = CLLocationManager()
+    @Published var currentUserLocation: CLLocationCoordinate2D?
+    @Published var isNearEndingLocation: Bool = false
+
+    override init() {
+        super.init()
+        self.locationManager.delegate = self
+        self.locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        self.locationManager.requestWhenInUseAuthorization()
+    }
+    
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let latestLocation = locations.last else { return }
+        Task { @MainActor in
+            self.currentUserLocation = latestLocation.coordinate
+            self.checkProximityToEndingLocation(currentLocation: latestLocation)
+        }
+    }
+    
+    private func checkProximityToEndingLocation(currentLocation: CLLocation) {
+        guard let route = fetchedRouteData else { return }
+        let endLocation = CLLocation(latitude: route.endLocation.latitude, longitude: route.endLocation.longitude)
+        let distance = currentLocation.distance(from: endLocation)
+        // Enable End trip if within 200 meters
+        self.isNearEndingLocation = distance <= 200
+    }
 
     var currentTripState: TripState {
         selectedSessionType == .morning ? morningTripState : eveningTripState
@@ -129,6 +161,14 @@ final class DriverDashboardViewModel: ObservableObject {
         } else {
             eveningTripState = .duringTrip
         }
+        locationManager.startUpdatingLocation()
+        
+        NotificationManager.shared.scheduleNotification(
+            title: "Trip Started",
+            body: "Your \(selectedSessionType == .morning ? "morning" : "evening") session has officially begun.",
+            actionType: "TRIP_START",
+            isTripAlert: true
+        )
     }
 
     func finishTrip() {
@@ -137,6 +177,14 @@ final class DriverDashboardViewModel: ObservableObject {
         } else {
             eveningTripState = .afterTrip
         }
+        locationManager.stopUpdatingLocation()
+        
+        NotificationManager.shared.scheduleNotification(
+            title: "Trip Completed",
+            body: "You have arrived at the destination. Well done!",
+            actionType: "TRIP_END",
+            isTripAlert: true
+        )
     }
 
     func selectSession(_ session: SessionType) {
@@ -155,6 +203,7 @@ final class DriverDashboardViewModel: ObservableObject {
                 do {
                     let routeId = driver.assignedRouteId
                     let route = try await RouteService.shared.fetchRoute(routeId: routeId)
+                    self.fetchedRouteData = route
                     let timeFormatter = DateFormatter()
                     timeFormatter.timeStyle = .short
                     

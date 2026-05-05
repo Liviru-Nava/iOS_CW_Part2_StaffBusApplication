@@ -84,6 +84,8 @@ struct DriverPassengerRequestsView: View {
 
     private func passengerRequestRow(request: DriverProfileViewModel.PassengerJoinRequest) -> some View {
         VStack(alignment: .leading, spacing: 12) {
+
+            // Header: avatar + name + session badge
             HStack(spacing: 12) {
                 ZStack {
                     Circle()
@@ -107,8 +109,21 @@ struct DriverPassengerRequestsView: View {
                         .clipShape(Capsule())
                 }
                 Spacer()
+
+                // Phone number button
+                if !request.passengerPhone.isEmpty {
+                    Link(destination: URL(string: "tel:\(request.passengerPhone.filter { $0.isNumber })")!) {
+                        Image(systemName: "phone.fill")
+                            .font(.system(size: 13))
+                            .foregroundColor(.statusActive)
+                            .frame(width: 34, height: 34)
+                            .background(Color.statusActive.opacity(0.10))
+                            .clipShape(Circle())
+                    }
+                }
             }
 
+            // Pickup → Drop-off row
             HStack(spacing: 8) {
                 Image(systemName: "arrow.up.to.line")
                     .font(.system(size: 11))
@@ -130,6 +145,24 @@ struct DriverPassengerRequestsView: View {
                     .foregroundColor(.textSecondary)
             }
 
+            // Note from passenger (if any)
+            if !request.noteFromPassenger.isEmpty {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "text.bubble.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.textTertiary)
+                        .padding(.top, 1)
+                    Text(request.noteFromPassenger)
+                        .font(.system(size: 12))
+                        .foregroundColor(.textSecondary)
+                        .lineLimit(3)
+                }
+                .padding(10)
+                .background(Color.surfaceBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            // Accept / Reject buttons
             HStack(spacing: 10) {
                 Button {
                     driverProfileViewModel.acceptPassengerJoinRequest(requestIdentifier: request.id)
@@ -171,7 +204,7 @@ struct DriverPassengerRequestsView: View {
                 Text("No Pending Requests")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.textPrimary)
-                Text("New passenger join requests will appear here.")
+                Text("New passenger join requests will appear here automatically.")
                     .font(.system(size: 14))
                     .foregroundColor(.textSecondary)
                     .multilineTextAlignment(.center)

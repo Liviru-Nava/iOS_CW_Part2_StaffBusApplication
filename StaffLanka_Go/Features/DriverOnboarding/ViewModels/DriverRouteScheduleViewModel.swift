@@ -418,8 +418,11 @@ final class DriverRouteScheduleViewModel: ObservableObject {
                 eveningPrice: ePrice,
                 bothTripsPrice: bPrice,
                 pricePerTrip: nil,
-                routeCreatedAt: Date()
+                routeCreatedAt: Date(),
+                startName: startingPoint,
+                endName: endingPoint
             )
+
 
             let createdRouteId = try await RouteService.shared.createRoute(routeRecord: newRouteRecord)
 
