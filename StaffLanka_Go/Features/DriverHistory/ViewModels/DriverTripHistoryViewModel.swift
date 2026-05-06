@@ -59,8 +59,15 @@ final class DriverTripHistoryViewModel: ObservableObject {
     @Published var selectedTripForDetailView: DriverHistoryTripRecord? = nil
     @Published var selectedTripDetailDisplayMode: DriverTripDetailDisplayMode = .textView
     @Published var selectedDateRangeFilter: TripHistoryDateFilter = .last30Days
+    @Published var allTripRecords: [DriverHistoryTripRecord] = []
 
-    let allTripRecords: [DriverHistoryTripRecord] = DriverHistoryTripRecord.mockDriverTrips
+    private var tripHistoryStoreSubscription: AnyCancellable?
+
+    init() {
+        tripHistoryStoreSubscription = TripHistoryStore.shared.$completedTripRecords
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.allTripRecords, on: self)
+    }
 
     var filteredTripRecords: [DriverHistoryTripRecord] {
         let now = Date()
@@ -118,6 +125,5 @@ final class DriverTripHistoryViewModel: ObservableObject {
 }
 
 extension DriverHistoryTripRecord {
-
     static let mockDriverTrips: [DriverHistoryTripRecord] = []
 }

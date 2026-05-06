@@ -33,6 +33,23 @@ struct PassengerEnrolledServicesView: View {
         .background(Color.appBackground)
         .navigationTitle("Enrolled Services")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            passengerEnrolledServiceViewModel.startListening()
+        }
+        .overlay {
+            if passengerEnrolledServiceViewModel.isLoading {
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                        .tint(Color.brandAccent)
+                    Text("Loading your services...")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.textSecondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.appBackground.opacity(0.8))
+            }
+        }
         .alert("Cancel Enrollment", isPresented: $passengerEnrolledServiceViewModel.showCancelAlert) {
             Button("Keep Service", role: .cancel) {}
             Button("Cancel Enrollment", role: .destructive) { passengerEnrolledServiceViewModel.handleCancel() }

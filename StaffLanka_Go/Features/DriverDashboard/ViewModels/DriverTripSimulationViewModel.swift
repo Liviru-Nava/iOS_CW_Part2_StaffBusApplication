@@ -6,9 +6,7 @@
 import Foundation
 import MapKit
 import Combine
-import FirebaseAuth
 
-// One physical stop along the simulated SF route
 struct SimulationRouteStop: Identifiable {
     let id = UUID()
     let stopDisplayName: String
@@ -16,7 +14,6 @@ struct SimulationRouteStop: Identifiable {
     let textualInstructionToNextStop: String
 }
 
-// Per-stop row shown in the floating passenger panel
 struct SimulationPassengerStopRow: Identifiable {
     let id = UUID()
     let stopDisplayName: String
@@ -27,21 +24,19 @@ struct SimulationPassengerStopRow: Identifiable {
     var hasBeenVisited: Bool
 }
 
-// Lightweight passenger record used during simulation
 struct SimulationEnrolledPassenger: Identifiable {
     let id: String
     let fullName: String
     let assignedStopName: String
-    let attendanceStatusLabel: String   // "attending" | "absent" | "not marked"
+    let attendanceStatusLabel: String
 }
 
 @MainActor
 final class DriverTripSimulationViewModel: ObservableObject {
 
-    // Configurable total simulation duration in seconds
+    // Configurable — change this single value to adjust simulation length
     let simulationTotalDurationSeconds: Double = 90
 
-    // How frequently the bus coordinate updates (smaller = smoother)
     private let coordinateUpdateIntervalSeconds: Double = 0.4
 
     @Published var currentBusCoordinate: CLLocationCoordinate2D
@@ -50,10 +45,13 @@ final class DriverTripSimulationViewModel: ObservableObject {
     @Published var passengerStopRows: [SimulationPassengerStopRow] = []
     @Published var isInstructionsPanelVisible: Bool = false
     @Published var isSimulationComplete: Bool = false
-    @Published var isFloatingPanelExpanded: Bool = true
+    @Published var isFloatingPanelExpanded: Bool = false
     @Published var completedTripRecord: DriverHistoryTripRecord? = nil
+    @Published var isCalculatingRoadRoute: Bool = true
+    // Full road path from MKDirections — exposed so the View can draw MapPolyline
+    @Published var roadPolylineCoordinates: [CLLocationCoordinate2D] = []
 
-    // San Francisco simulation stops — each must be visited before the final destination
+    // San Francisco stops — MKDirections will route along actual roads between these
     let allSimulationStops: [SimulationRouteStop] = [
         SimulationRouteStop(
             stopDisplayName: "Union Square",
@@ -78,7 +76,7 @@ final class DriverTripSimulationViewModel: ObservableObject {
         SimulationRouteStop(
             stopDisplayName: "Noe Valley",
             coordinate: CLLocationCoordinate2D(latitude: 37.7502, longitude: -122.4326),
-            textualInstructionToNextStop: "Continue south on Church St, then merge onto Diamond St heading toward Bosworth St"
+            textualInstructionToNextStop: "Continue south on Church St, then merge onto Diamond St toward Bosworth St"
         ),
         SimulationRouteStop(
             stopDisplayName: "Glen Park",
@@ -87,6 +85,11 @@ final class DriverTripSimulationViewModel: ObservableObject {
         )
     ]
 
+    // Dense road-following path built by MKDirections; the bus moves along this
+    private var fullRoadPathCoordinates: [CLLocationCoordinate2D] = []
+    // Which index in fullRoadPathCoordinates corresponds to arriving at each stop
+    private var stopArrivalPathIndices: [Int] = []
+
     private var simulationTimer: Timer?
     private var firestoreTripId: String?
     private var sessionLabel: String = "Morning"
@@ -94,77 +97,127 @@ final class DriverTripSimulationViewModel: ObservableObject {
     private var stopArrivalTimeLabels: [String] = []
 
     init() {
-        currentBusCoordinate = allSimulationStops.first?.coordinate ?? CLLocationCoordinate2D(latitude: 37.7879, longitude: -122.4075)
+        currentBusCoordinate = allSimulationStops.first?.coordinate
+            ?? CLLocationCoordinate2D(latitude: 37.7879, longitude: -122.4075)
     }
 
-    deinit {
-        simulationTimer?.invalidate()
-    }
+    deinit { simulationTimer?.invalidate() }
 
-    // Begins the simulation, creates a Firestore trip document
     func startSimulation(routeId: String, driverId: String, session: String, passengers: [SimulationEnrolledPassenger]) {
         sessionLabel = session
         enrolledPassengers = passengers
         currentActiveStopIndex = 0
         elapsedSimulationSeconds = 0
         isSimulationComplete = false
+        isCalculatingRoadRoute = true
         stopArrivalTimeLabels = Array(repeating: "--:--", count: allSimulationStops.count)
         stopArrivalTimeLabels[0] = formattedCurrentTime()
 
         buildInitialPassengerStopRows(passengers: passengers)
 
         Task {
+            // Build the road route first, then start the Firestore trip and timer
+            await buildRoadRouteAlongActualRoads()
+            isCalculatingRoadRoute = false
+
             do {
                 let tripId = try await TripService.shared.startTrip(routeId: routeId, driverId: driverId, session: session)
-                self.firestoreTripId = tripId
-                print("🟢 [SimulationVM] Trip started in Firestore, id: \(tripId)")
+                firestoreTripId = tripId
+                print("🟢 [SimulationVM] Trip started in Firestore id: \(tripId)")
             } catch {
                 print("🔴 [SimulationVM] Firestore startTrip error: \(error.localizedDescription)")
             }
-        }
 
-        simulationTimer = Timer.scheduledTimer(withTimeInterval: coordinateUpdateIntervalSeconds, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.advanceSimulation()
-            }
+            startSimulationTimer()
         }
     }
 
-    // Called every tick by the timer
+    // Requests driving routes from MKDirections for every consecutive stop pair
+    // and assembles the results into one continuous road-following coordinate array
+    private func buildRoadRouteAlongActualRoads() async {
+        var assembledPathCoordinates: [CLLocationCoordinate2D] = []
+        var assembledStopArrivalIndices: [Int] = [0] // stop 0 is always at index 0
+
+        for legIndex in 0 ..< allSimulationStops.count - 1 {
+            let legStartStop = allSimulationStops[legIndex]
+            let legEndStop = allSimulationStops[legIndex + 1]
+
+            let directionsRequest = MKDirections.Request()
+            directionsRequest.source = MKMapItem(placemark: MKPlacemark(coordinate: legStartStop.coordinate))
+            directionsRequest.destination = MKMapItem(placemark: MKPlacemark(coordinate: legEndStop.coordinate))
+            directionsRequest.transportType = .automobile
+
+            if let calculatedRoute = try? await MKDirections(request: directionsRequest).calculate().routes.first {
+                var legCoordinates = calculatedRoute.polyline.extractCoordinates()
+                // Drop the first point on legs after the first to avoid duplicating the junction stop
+                if legIndex > 0 { legCoordinates = Array(legCoordinates.dropFirst()) }
+                assembledPathCoordinates.append(contentsOf: legCoordinates)
+                print("🟢 [SimulationVM] Leg \(legIndex) road route: \(legCoordinates.count) points")
+            } else {
+                // Fallback: linear interpolation if MKDirections fails for this leg
+                let fallbackPoints = linearInterpolatedCoordinates(
+                    from: legStartStop.coordinate,
+                    to: legEndStop.coordinate,
+                    stepCount: 40
+                )
+                let pointsToAdd = legIndex > 0 ? Array(fallbackPoints.dropFirst()) : fallbackPoints
+                assembledPathCoordinates.append(contentsOf: pointsToAdd)
+                print("🟡 [SimulationVM] Leg \(legIndex) using linear fallback")
+            }
+
+            assembledStopArrivalIndices.append(assembledPathCoordinates.count - 1)
+        }
+
+        fullRoadPathCoordinates = assembledPathCoordinates
+        stopArrivalPathIndices = assembledStopArrivalIndices
+        roadPolylineCoordinates = assembledPathCoordinates
+        print("🟢 [SimulationVM] Full road path: \(assembledPathCoordinates.count) total coordinates")
+    }
+
+    private func linearInterpolatedCoordinates(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D, stepCount: Int) -> [CLLocationCoordinate2D] {
+        (0 ... stepCount).map { step in
+            let fraction = Double(step) / Double(stepCount)
+            return CLLocationCoordinate2D(
+                latitude: from.latitude + (to.latitude - from.latitude) * fraction,
+                longitude: from.longitude + (to.longitude - from.longitude) * fraction
+            )
+        }
+    }
+
+    private func startSimulationTimer() {
+        simulationTimer?.invalidate()
+        simulationTimer = Timer.scheduledTimer(withTimeInterval: coordinateUpdateIntervalSeconds, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.advanceSimulation() }
+        }
+    }
+
+    // Advances the bus position by stepping through fullRoadPathCoordinates proportionally to elapsed time
     private func advanceSimulation() {
+        guard !fullRoadPathCoordinates.isEmpty else { return }
+
         elapsedSimulationSeconds += coordinateUpdateIntervalSeconds
-
         let overallProgress = min(elapsedSimulationSeconds / simulationTotalDurationSeconds, 1.0)
-        let totalLegs = allSimulationStops.count - 1
-        let legDurationSeconds = simulationTotalDurationSeconds / Double(totalLegs)
-        let currentLegIndex = min(Int(elapsedSimulationSeconds / legDurationSeconds), totalLegs - 1)
-        let progressWithinCurrentLeg = (elapsedSimulationSeconds - Double(currentLegIndex) * legDurationSeconds) / legDurationSeconds
 
-        let legStartCoordinate = allSimulationStops[currentLegIndex].coordinate
-        let legEndCoordinate = allSimulationStops[currentLegIndex + 1].coordinate
-
-        currentBusCoordinate = CLLocationCoordinate2D(
-            latitude: legStartCoordinate.latitude + (legEndCoordinate.latitude - legStartCoordinate.latitude) * progressWithinCurrentLeg,
-            longitude: legStartCoordinate.longitude + (legEndCoordinate.longitude - legStartCoordinate.longitude) * progressWithinCurrentLeg
+        let targetPathIndex = min(
+            Int(overallProgress * Double(fullRoadPathCoordinates.count - 1)),
+            fullRoadPathCoordinates.count - 1
         )
+        currentBusCoordinate = fullRoadPathCoordinates[targetPathIndex]
 
-        // Detect arrival at a new stop (within first 10% of the leg = just arrived at start of leg)
-        let newStopIndex = progressWithinCurrentLeg < 0.1 ? currentLegIndex : currentLegIndex
-        if newStopIndex > currentActiveStopIndex || (currentLegIndex == totalLegs - 1 && progressWithinCurrentLeg >= 0.98) {
-            markStopAsVisited(stopIndex: min(newStopIndex + 1, allSimulationStops.count - 1))
+        // Check whether the bus has reached each stop's corresponding path index
+        for (stopIndex, arrivalPathIndex) in stopArrivalPathIndices.enumerated() {
+            if targetPathIndex >= arrivalPathIndex && currentActiveStopIndex < stopIndex {
+                markStopAsVisited(stopIndex: stopIndex)
+            }
         }
 
         updateEstimatedArrivalTimesForFutureStops(overallProgress: overallProgress)
 
         if let tripId = firestoreTripId {
-            Task {
-                try? await TripService.shared.updateDriverLocation(tripId: tripId, location: currentBusCoordinate)
-            }
+            Task { try? await TripService.shared.updateDriverLocation(tripId: tripId, location: currentBusCoordinate) }
         }
 
-        if overallProgress >= 1.0 {
-            completeSimulation()
-        }
+        if overallProgress >= 1.0 { completeSimulation() }
     }
 
     private func markStopAsVisited(stopIndex: Int) {
@@ -172,46 +225,45 @@ final class DriverTripSimulationViewModel: ObservableObject {
         currentActiveStopIndex = stopIndex
         stopArrivalTimeLabels[stopIndex] = formattedCurrentTime()
 
-        for rowIndex in passengerStopRows.indices {
-            if passengerStopRows[rowIndex].stopDisplayName == allSimulationStops[stopIndex].stopDisplayName {
-                passengerStopRows[rowIndex].hasBeenVisited = true
-                passengerStopRows[rowIndex] = SimulationPassengerStopRow(
-                    stopDisplayName: passengerStopRows[rowIndex].stopDisplayName,
-                    totalPassengersAtStop: passengerStopRows[rowIndex].totalPassengersAtStop,
-                    attendingPassengersCount: passengerStopRows[rowIndex].attendingPassengersCount,
-                    unsurePassengersCount: passengerStopRows[rowIndex].unsurePassengersCount,
-                    estimatedArrivalTimeLabel: stopArrivalTimeLabels[stopIndex],
-                    hasBeenVisited: true
-                )
-            }
+        let visitedStopName = allSimulationStops[stopIndex].stopDisplayName
+        if let rowIndex = passengerStopRows.firstIndex(where: { $0.stopDisplayName == visitedStopName }) {
+            let existingRow = passengerStopRows[rowIndex]
+            passengerStopRows[rowIndex] = SimulationPassengerStopRow(
+                stopDisplayName: existingRow.stopDisplayName,
+                totalPassengersAtStop: existingRow.totalPassengersAtStop,
+                attendingPassengersCount: existingRow.attendingPassengersCount,
+                unsurePassengersCount: existingRow.unsurePassengersCount,
+                estimatedArrivalTimeLabel: stopArrivalTimeLabels[stopIndex],
+                hasBeenVisited: true
+            )
         }
     }
 
     private func updateEstimatedArrivalTimesForFutureStops(overallProgress: Double) {
-        let remainingSeconds = simulationTotalDurationSeconds * (1.0 - overallProgress)
-        let totalLegs = allSimulationStops.count - 1
-        let secondsPerLeg = simulationTotalDurationSeconds / Double(totalLegs)
+        let secondsPerLeg = simulationTotalDurationSeconds / Double(allSimulationStops.count - 1)
 
-        for stopIndex in (currentActiveStopIndex + 1)..<allSimulationStops.count {
-            let secondsUntilThisStop = Double(stopIndex) * secondsPerLeg - elapsedSimulationSeconds
-            let estimatedDate = Date().addingTimeInterval(max(secondsUntilThisStop, 0))
+        for stopIndex in (currentActiveStopIndex + 1) ..< allSimulationStops.count {
+            let secondsUntilStop = Double(stopIndex) * secondsPerLeg - elapsedSimulationSeconds
+            let estimatedArrivalDate = Date().addingTimeInterval(max(secondsUntilStop, 0))
             let timeFormatter = DateFormatter()
             timeFormatter.dateFormat = "hh:mm a"
-            stopArrivalTimeLabels[stopIndex] = timeFormatter.string(from: estimatedDate)
+            stopArrivalTimeLabels[stopIndex] = timeFormatter.string(from: estimatedArrivalDate)
         }
 
         for rowIndex in passengerStopRows.indices {
-            if let matchingStopIndex = allSimulationStops.firstIndex(where: { $0.stopDisplayName == passengerStopRows[rowIndex].stopDisplayName }) {
-                if !passengerStopRows[rowIndex].hasBeenVisited {
-                    passengerStopRows[rowIndex] = SimulationPassengerStopRow(
-                        stopDisplayName: passengerStopRows[rowIndex].stopDisplayName,
-                        totalPassengersAtStop: passengerStopRows[rowIndex].totalPassengersAtStop,
-                        attendingPassengersCount: passengerStopRows[rowIndex].attendingPassengersCount,
-                        unsurePassengersCount: passengerStopRows[rowIndex].unsurePassengersCount,
-                        estimatedArrivalTimeLabel: stopArrivalTimeLabels[matchingStopIndex],
-                        hasBeenVisited: false
-                    )
-                }
+            guard !passengerStopRows[rowIndex].hasBeenVisited else { continue }
+            if let matchingStopIndex = allSimulationStops.firstIndex(where: {
+                $0.stopDisplayName == passengerStopRows[rowIndex].stopDisplayName
+            }) {
+                let existingRow = passengerStopRows[rowIndex]
+                passengerStopRows[rowIndex] = SimulationPassengerStopRow(
+                    stopDisplayName: existingRow.stopDisplayName,
+                    totalPassengersAtStop: existingRow.totalPassengersAtStop,
+                    attendingPassengersCount: existingRow.attendingPassengersCount,
+                    unsurePassengersCount: existingRow.unsurePassengersCount,
+                    estimatedArrivalTimeLabel: stopArrivalTimeLabels[matchingStopIndex],
+                    hasBeenVisited: false
+                )
             }
         }
     }
@@ -247,15 +299,11 @@ final class DriverTripSimulationViewModel: ObservableObject {
         )
     }
 
-    // Distribute enrolled passengers across stops for the simulation display
     private func buildInitialPassengerStopRows(passengers: [SimulationEnrolledPassenger]) {
-        var stopRowMap: [String: (attending: Int, unsure: Int)] = [:]
-        for stop in allSimulationStops {
-            stopRowMap[stop.stopDisplayName] = (attending: 0, unsure: 0)
-        }
+        var stopCountMap: [String: (attending: Int, unsure: Int)] = [:]
+        for stop in allSimulationStops { stopCountMap[stop.stopDisplayName] = (0, 0) }
 
-        // Spread passengers evenly across intermediate stops
-        let intermediateStops = allSimulationStops.dropFirst().dropLast()
+        let intermediateStops = Array(allSimulationStops.dropFirst().dropLast())
         for (passengerIndex, passenger) in passengers.enumerated() {
             let assignedStopName: String
             if !passenger.assignedStopName.isEmpty,
@@ -264,16 +312,15 @@ final class DriverTripSimulationViewModel: ObservableObject {
             } else {
                 assignedStopName = intermediateStops[passengerIndex % intermediateStops.count].stopDisplayName
             }
-
             if passenger.attendanceStatusLabel == "attending" {
-                stopRowMap[assignedStopName]?.attending += 1
+                stopCountMap[assignedStopName]?.attending += 1
             } else {
-                stopRowMap[assignedStopName]?.unsure += 1
+                stopCountMap[assignedStopName]?.unsure += 1
             }
         }
 
         passengerStopRows = allSimulationStops.enumerated().map { stopIndex, stop in
-            let counts = stopRowMap[stop.stopDisplayName] ?? (attending: 0, unsure: 0)
+            let counts = stopCountMap[stop.stopDisplayName] ?? (0, 0)
             return SimulationPassengerStopRow(
                 stopDisplayName: stop.stopDisplayName,
                 totalPassengersAtStop: counts.attending + counts.unsure,
@@ -304,15 +351,6 @@ final class DriverTripSimulationViewModel: ObservableObject {
             )
         }
 
-        let durationInMinutes = max(Int(simulationTotalDurationSeconds / 60), 1)
-
-        let performanceSummary = DriverTripPerformanceSummary(
-            totalStopCount: allSimulationStops.count,
-            completedStopCount: allSimulationStops.count,
-            totalPassengersPickedUp: enrolledPassengers.count,
-            tripDurationInMinutes: durationInMinutes
-        )
-
         return DriverHistoryTripRecord(
             tripDate: Date(),
             sessionType: sessionLabel == "Morning" ? .morning : .evening,
@@ -321,33 +359,28 @@ final class DriverTripSimulationViewModel: ObservableObject {
             actualEndTime: timeFormatter.string(from: Date()),
             stopsTimeline: stopsTimeline,
             passengerPickupList: passengerPickupList,
-            performanceSummary: performanceSummary
+            performanceSummary: DriverTripPerformanceSummary(
+                totalStopCount: allSimulationStops.count,
+                completedStopCount: allSimulationStops.count,
+                totalPassengersPickedUp: enrolledPassengers.count,
+                tripDurationInMinutes: max(Int(simulationTotalDurationSeconds / 60), 1)
+            )
         )
     }
 
-    var simulationProgressFraction: Double {
-        min(elapsedSimulationSeconds / simulationTotalDurationSeconds, 1.0)
-    }
+    var simulationProgressFraction: Double { min(elapsedSimulationSeconds / simulationTotalDurationSeconds, 1.0) }
 
     var elapsedTimeDisplayLabel: String {
-        let minutes = Int(elapsedSimulationSeconds) / 60
-        let seconds = Int(elapsedSimulationSeconds) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+        String(format: "%02d:%02d", Int(elapsedSimulationSeconds) / 60, Int(elapsedSimulationSeconds) % 60)
     }
 
     var totalDurationDisplayLabel: String {
-        let minutes = Int(simulationTotalDurationSeconds) / 60
-        let seconds = Int(simulationTotalDurationSeconds) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+        String(format: "%02d:%02d", Int(simulationTotalDurationSeconds) / 60, Int(simulationTotalDurationSeconds) % 60)
     }
 
-    var currentActiveStopName: String {
-        allSimulationStops[safe: currentActiveStopIndex]?.stopDisplayName ?? "—"
-    }
+    var currentActiveStopName: String { allSimulationStops[safe: currentActiveStopIndex]?.stopDisplayName ?? "—" }
 
-    var currentLegInstruction: String {
-        allSimulationStops[safe: currentActiveStopIndex]?.textualInstructionToNextStop ?? ""
-    }
+    var currentLegInstruction: String { allSimulationStops[safe: currentActiveStopIndex]?.textualInstructionToNextStop ?? "" }
 
     private func formattedCurrentTime() -> String {
         let formatter = DateFormatter()
@@ -356,7 +389,16 @@ final class DriverTripSimulationViewModel: ObservableObject {
     }
 }
 
-// Safe subscript to avoid out-of-bounds crashes
+// Extracts CLLocationCoordinate2D array from an MKPolyline
+extension MKPolyline {
+    func extractCoordinates() -> [CLLocationCoordinate2D] {
+        var coords = [CLLocationCoordinate2D](repeating: kCLLocationCoordinate2DInvalid, count: pointCount)
+        getCoordinates(&coords, range: NSRange(location: 0, length: pointCount))
+        return coords
+    }
+}
+
+// Safe subscript used throughout the VM to avoid index out-of-bounds crashes
 extension Array {
     subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil

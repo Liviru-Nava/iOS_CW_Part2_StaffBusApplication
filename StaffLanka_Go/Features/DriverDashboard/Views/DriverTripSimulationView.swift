@@ -5,7 +5,6 @@
 
 import SwiftUI
 import MapKit
-import CoreLocation
 
 struct DriverTripSimulationView: View {
 
@@ -29,6 +28,9 @@ struct DriverTripSimulationView: View {
             mapLayer
             floatingInstructionsPanel
             floatingPassengerPanel
+            if simulationViewModel.isCalculatingRoadRoute {
+                routeCalculationLoadingOverlay
+            }
             if showCompletionOverlay {
                 tripCompletionOverlay
             }
@@ -44,45 +46,47 @@ struct DriverTripSimulationView: View {
         }
         .onChange(of: simulationViewModel.isSimulationComplete) { _, isComplete in
             if isComplete {
-                withAnimation(.easeInOut(duration: 0.5)) {
-                    showCompletionOverlay = true
-                }
+                withAnimation(.easeInOut(duration: 0.5)) { showCompletionOverlay = true }
             }
         }
-        .onChange(of: LatLon(lat: simulationViewModel.currentBusCoordinate.latitude,
-                             lon: simulationViewModel.currentBusCoordinate.longitude)) { _, newLatLon in
-            let newCoordinate = CLLocationCoordinate2D(latitude: newLatLon.lat, longitude: newLatLon.lon)
+        .onChange(of: simulationViewModel.currentBusCoordinate.latitude) { _, _ in
             withAnimation(.easeInOut(duration: 0.35)) {
-                mapCameraPosition = .region(
-                    MKCoordinateRegion(
-                        center: newCoordinate,
-                        span: MKCoordinateSpan(latitudeDelta: 0.025, longitudeDelta: 0.025)
-                    )
-                )
+                mapCameraPosition = .region(MKCoordinateRegion(
+                    center: simulationViewModel.currentBusCoordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.018, longitudeDelta: 0.018)
+                ))
             }
         }
     }
 
-    // MARK: - Map layer with bus annotation and all stop pins
-
+    // Map with bus annotation, stop pins, and the actual road polyline
     private var mapLayer: some View {
         Map(position: $mapCameraPosition) {
 
+            // Road polyline drawn once MKDirections has finished calculating
+            if !simulationViewModel.roadPolylineCoordinates.isEmpty {
+                MapPolyline(coordinates: simulationViewModel.roadPolylineCoordinates)
+                    .stroke(Color.brandAccent.opacity(0.8), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+            }
+
+            // Animated bus annotation
             Annotation("Bus", coordinate: simulationViewModel.currentBusCoordinate) {
                 ZStack {
                     Circle()
                         .fill(Color.statusActive.opacity(0.22))
-                        .frame(width: 50, height: 50)
+                        .frame(width: 52, height: 52)
                     Image(systemName: "bus.fill")
                         .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(Color.white)
-                        .frame(width: 36, height: 36)
+                        .foregroundStyle(.white)
+                        .frame(width: 38, height: 38)
                         .background(Color.statusActive)
                         .clipShape(Circle())
                 }
                 .shadow(color: Color.statusActive.opacity(0.5), radius: 6, x: 0, y: 3)
+                .animation(.easeInOut(duration: 0.35), value: simulationViewModel.currentBusCoordinate.latitude)
             }
 
+            // Stop pin annotations
             ForEach(Array(simulationViewModel.allSimulationStops.enumerated()), id: \.element.id) { stopIndex, stop in
                 let isFirstStop = stopIndex == 0
                 let isLastStop = stopIndex == simulationViewModel.allSimulationStops.count - 1
@@ -91,30 +95,54 @@ struct DriverTripSimulationView: View {
                 Annotation(stop.stopDisplayName, coordinate: stop.coordinate) {
                     ZStack {
                         Circle()
-                            .fill(hasBeenVisited ? Color.statusActive.opacity(0.2) : Color.brandAccent.opacity(0.15))
-                            .frame(width: 34, height: 34)
+                            .fill(hasBeenVisited ? Color.statusActive.opacity(0.25) : Color.brandAccent.opacity(0.18))
+                            .frame(width: 36, height: 36)
                         if isLastStop {
                             Image(systemName: "flag.checkered.2.crossed")
-                                .font(.system(size: 14))
+                                .font(.system(size: 15))
                                 .foregroundStyle(Color.statusDanger)
                         } else if isFirstStop {
                             Image(systemName: "figure.stand")
-                                .font(.system(size: 13))
+                                .font(.system(size: 14))
                                 .foregroundStyle(Color.statusActive)
                         } else {
                             Circle()
                                 .fill(hasBeenVisited ? Color.statusActive : Color.brandAccent)
-                                .frame(width: 12, height: 12)
+                                .frame(width: 13, height: 13)
                         }
                     }
+                    .overlay(Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1.5))
+                    .shadow(radius: 3)
                 }
             }
         }
         .mapStyle(.standard(elevation: .realistic))
     }
 
-    // MARK: - Floating instructions toggle + panel
+    // Translucent loading screen shown while MKDirections calculates the road path
+    private var routeCalculationLoadingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.55).ignoresSafeArea()
+            VStack(spacing: 16) {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .scaleEffect(1.4)
+                    .tint(.white)
+                Text("Calculating Road Route…")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text("Finding the best road path through all stops")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .multilineTextAlignment(.center)
+            }
+            .padding(30)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+        }
+    }
 
+    // Top-right directions toggle button + the expandable instruction card
     private var floatingInstructionsPanel: some View {
         VStack(spacing: 0) {
             HStack {
@@ -127,7 +155,7 @@ struct DriverTripSimulationView: View {
                     HStack(spacing: 6) {
                         Image(systemName: simulationViewModel.isInstructionsPanelVisible ? "eye.slash.fill" : "map.fill")
                             .font(.system(size: 12, weight: .semibold))
-                        Text(simulationViewModel.isInstructionsPanelVisible ? "Hide Directions" : "Show Directions")
+                        Text(simulationViewModel.isInstructionsPanelVisible ? "Hide Directions" : "Directions")
                             .font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundStyle(.white)
@@ -166,83 +194,68 @@ struct DriverTripSimulationView: View {
         }
     }
 
-    // MARK: - Floating bottom passenger panel
-
+    // Bottom floating panel — starts collapsed so the map is fully visible
     private var floatingPassengerPanel: some View {
         VStack(spacing: 0) {
             Spacer()
+
             VStack(spacing: 0) {
 
-                // Drag handle
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.textTertiary.opacity(0.4))
-                    .frame(width: 36, height: 4)
-                    .padding(.top, 10)
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                // Drag handle row with expand/collapse chevron button
+                HStack {
+                    Spacer()
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.textTertiary.opacity(0.5))
+                        .frame(width: 36, height: 4)
+                    Spacer()
+                    Button {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
                             simulationViewModel.isFloatingPanelExpanded.toggle()
                         }
-                    }
-
-                // Panel header with progress
-                VStack(spacing: 10) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("\(sessionLabel) Trip — Live")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(Color.textPrimary)
-                            Text("Stop \(simulationViewModel.currentActiveStopIndex + 1) of \(simulationViewModel.allSimulationStops.count) — \(simulationViewModel.currentActiveStopName)")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Color.textSecondary)
-                        }
-                        Spacer()
-                        Text("\(simulationViewModel.elapsedTimeDisplayLabel) / \(simulationViewModel.totalDurationDisplayLabel)")
-                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    } label: {
+                        Image(systemName: simulationViewModel.isFloatingPanelExpanded ? "chevron.down.circle.fill" : "chevron.up.circle.fill")
+                            .font(.system(size: 22))
                             .foregroundStyle(Color.brandAccent)
                     }
-
-                    GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.divider)
-                                .frame(height: 5)
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(LinearGradient.brand)
-                                .frame(width: geometry.size.width * simulationViewModel.simulationProgressFraction, height: 5)
-                                .animation(.linear(duration: 0.4), value: simulationViewModel.simulationProgressFraction)
-                        }
-                    }
-                    .frame(height: 5)
+                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 18)
-                .padding(.top, 12)
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .padding(.bottom, 6)
 
+                // Status row — always visible
+                panelStatusRow
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 10)
+
+                // Expandable section — stop list + progress bar
                 if simulationViewModel.isFloatingPanelExpanded {
-                    Divider()
+                    panelProgressRow
                         .padding(.horizontal, 18)
-                        .padding(.top, 12)
+                        .padding(.bottom, 10)
 
-                    // Stop list with passenger attendance rows
+                    Divider().padding(.horizontal, 18)
+
                     ScrollView(showsIndicators: false) {
-                        VStack(spacing: 6) {
+                        VStack(spacing: 5) {
                             ForEach(simulationViewModel.passengerStopRows) { stopRow in
                                 passengerStopRowView(stopRow: stopRow)
                             }
                         }
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
                     }
-                    .frame(maxHeight: 280)
+                    .frame(maxHeight: 240)
+
+                    Divider().padding(.horizontal, 18)
                 }
 
-                // End trip button — active only when simulation is complete
-                Button {
-                    dismiss()
-                } label: {
+                // Close / In-progress button
+                Button { dismiss() } label: {
                     HStack(spacing: 8) {
                         Image(systemName: simulationViewModel.isSimulationComplete ? "checkmark.circle.fill" : "hourglass")
                             .font(.system(size: 14, weight: .semibold))
-                        Text(simulationViewModel.isSimulationComplete ? "Close Simulation" : "Trip In Progress...")
+                        Text(simulationViewModel.isSimulationComplete ? "Close Simulation" : "Trip In Progress…")
                             .font(.system(size: 15, weight: .semibold))
                     }
                     .foregroundStyle(.white)
@@ -250,22 +263,54 @@ struct DriverTripSimulationView: View {
                     .padding(.vertical, 14)
                     .background(
                         simulationViewModel.isSimulationComplete
-                        ? LinearGradient(colors: [Color.statusActive, Color.statusActive.opacity(0.8)], startPoint: .leading, endPoint: .trailing)
-                        : LinearGradient(colors: [Color.statusInactive.opacity(0.5)], startPoint: .leading, endPoint: .trailing)
+                            ? LinearGradient(colors: [Color.statusActive, Color.statusActive.opacity(0.8)], startPoint: .leading, endPoint: .trailing)
+                            : LinearGradient(colors: [Color.statusInactive.opacity(0.45)], startPoint: .leading, endPoint: .trailing)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 13))
                 }
                 .buttonStyle(.plain)
                 .disabled(!simulationViewModel.isSimulationComplete)
                 .padding(.horizontal, 18)
-                .padding(.vertical, 14)
+                .padding(.top, 10)
+                .padding(.bottom, 18)
             }
             .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 24))
-            .shadow(color: Color.black.opacity(0.18), radius: 16, x: 0, y: -4)
+            .shadow(color: Color.black.opacity(0.2), radius: 18, x: 0, y: -5)
             .padding(.horizontal, 12)
             .padding(.bottom, 24)
         }
+    }
+
+    // Compact one-line status always shown at the top of the panel
+    private var panelStatusRow: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(simulationViewModel.isSimulationComplete ? Color.statusActive : Color.statusWarning)
+                .frame(width: 7, height: 7)
+            Text("\(sessionLabel) — Stop \(simulationViewModel.currentActiveStopIndex + 1)/\(simulationViewModel.allSimulationStops.count) · \(simulationViewModel.currentActiveStopName)")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.textPrimary)
+                .lineLimit(1)
+            Spacer()
+            Text("\(simulationViewModel.elapsedTimeDisplayLabel) / \(simulationViewModel.totalDurationDisplayLabel)")
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .foregroundStyle(Color.brandAccent)
+        }
+    }
+
+    // Progress bar shown only when the panel is expanded
+    private var panelProgressRow: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 4).fill(Color.divider).frame(height: 5)
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(LinearGradient.brand)
+                    .frame(width: geometry.size.width * simulationViewModel.simulationProgressFraction, height: 5)
+                    .animation(.linear(duration: 0.4), value: simulationViewModel.simulationProgressFraction)
+            }
+        }
+        .frame(height: 5)
     }
 
     private func passengerStopRowView(stopRow: SimulationPassengerStopRow) -> some View {
@@ -276,12 +321,11 @@ struct DriverTripSimulationView: View {
             ZStack {
                 Circle()
                     .fill(hasBeenVisited ? Color.statusActive.opacity(0.15) : (isCurrentStop ? Color.brandAccent.opacity(0.15) : Color.surfaceBackground))
-                    .frame(width: 36, height: 36)
+                    .frame(width: 34, height: 34)
                 Image(systemName: hasBeenVisited ? "checkmark.circle.fill" : (isCurrentStop ? "location.fill" : "mappin.circle"))
-                    .font(.system(size: 15))
+                    .font(.system(size: 14))
                     .foregroundStyle(hasBeenVisited ? Color.statusActive : (isCurrentStop ? Color.brandAccent : Color.textTertiary))
             }
-
             VStack(alignment: .leading, spacing: 3) {
                 Text(stopRow.stopDisplayName)
                     .font(.system(size: 13, weight: isCurrentStop ? .bold : .medium))
@@ -289,51 +333,44 @@ struct DriverTripSimulationView: View {
                 HStack(spacing: 8) {
                     if stopRow.attendingPassengersCount > 0 {
                         Label("\(stopRow.attendingPassengersCount) attending", systemImage: "checkmark.circle.fill")
-                            .font(.system(size: 11))
+                            .font(.system(size: 10))
                             .foregroundStyle(Color.statusActive)
                     }
                     if stopRow.unsurePassengersCount > 0 {
                         Label("\(stopRow.unsurePassengersCount) not sure", systemImage: "questionmark.circle.fill")
-                            .font(.system(size: 11))
+                            .font(.system(size: 10))
                             .foregroundStyle(Color.statusWarning)
                     }
                     if stopRow.totalPassengersAtStop == 0 {
                         Text("No passengers")
-                            .font(.system(size: 11))
+                            .font(.system(size: 10))
                             .foregroundStyle(Color.textTertiary)
                     }
                 }
             }
-
             Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
+            VStack(alignment: .trailing, spacing: 1) {
                 Text(stopRow.estimatedArrivalTimeLabel)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(isCurrentStop ? Color.brandAccent : Color.textSecondary)
                 Text("ETA")
                     .font(.system(size: 9))
                     .foregroundStyle(Color.textTertiary)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
         .background(isCurrentStop ? Color.brandAccent.opacity(0.07) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(isCurrentStop ? Color.brandAccent.opacity(0.25) : Color.clear, lineWidth: 1)
-        )
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(isCurrentStop ? Color.brandAccent.opacity(0.25) : Color.clear, lineWidth: 1))
     }
 
-    // MARK: - Trip completion overlay
-
+    // Full-screen completion overlay with stats and paginated passenger list
     private var tripCompletionOverlay: some View {
         ZStack {
             Color.black.opacity(0.65).ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
-                    // Header
                     VStack(spacing: 10) {
                         ZStack {
                             Circle().fill(Color.statusActive.opacity(0.2)).frame(width: 72, height: 72)
@@ -350,7 +387,6 @@ struct DriverTripSimulationView: View {
                     }
                     .padding(.top, 20)
 
-                    // Stats row
                     if let tripRecord = simulationViewModel.completedTripRecord {
                         HStack(spacing: 0) {
                             completionStatCell(value: "\(tripRecord.performanceSummary.totalStopCount)", label: "Stops")
@@ -363,13 +399,13 @@ struct DriverTripSimulationView: View {
                         .background(Color.white.opacity(0.1))
                         .clipShape(RoundedRectangle(cornerRadius: 14))
 
-                        // Paginated passenger attendance summary
-                        passengerSummarySection(tripRecord: tripRecord)
+                        PaginatedPassengerSummaryView(
+                            passengerPickupList: tripRecord.passengerPickupList,
+                            enrolledPassengers: enrolledPassengers
+                        )
                     }
 
-                    Button {
-                        dismiss()
-                    } label: {
+                    Button { dismiss() } label: {
                         Text("Close")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Color.brandPrimary)
@@ -402,24 +438,16 @@ struct DriverTripSimulationView: View {
         }
         .frame(maxWidth: .infinity)
     }
-
-    private func passengerSummarySection(tripRecord: DriverHistoryTripRecord) -> some View {
-        PaginatedPassengerSummaryView(
-            passengerPickupList: tripRecord.passengerPickupList,
-            enrolledPassengers: enrolledPassengers
-        )
-    }
 }
 
-// MARK: - Paginated passenger summary shown in the completion overlay
-
+// Paginated passenger summary used inside the completion overlay
 struct PaginatedPassengerSummaryView: View {
 
     let passengerPickupList: [DriverTripPassengerPickupRecord]
     let enrolledPassengers: [SimulationEnrolledPassenger]
 
-    private let pageSize: Int = 5
-    @State private var currentlyVisiblePageCount: Int = 1
+    private let pageSize = 5
+    @State private var currentlyVisiblePageCount = 1
 
     private var allPassengerSummaryRows: [PassengerTripSummaryRow] {
         enrolledPassengers.map { passenger in
@@ -437,10 +465,6 @@ struct PaginatedPassengerSummaryView: View {
         Array(allPassengerSummaryRows.prefix(currentlyVisiblePageCount * pageSize))
     }
 
-    private var hasMoreRowsToShow: Bool {
-        visibleRows.count < allPassengerSummaryRows.count
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Passenger Summary")
@@ -455,16 +479,12 @@ struct PaginatedPassengerSummaryView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             } else {
                 VStack(spacing: 6) {
-                    ForEach(visibleRows) { row in
-                        passengerSummaryRow(row: row)
-                    }
+                    ForEach(visibleRows) { row in passengerSummaryRow(row: row) }
                 }
 
-                if hasMoreRowsToShow {
+                if visibleRows.count < allPassengerSummaryRows.count {
                     Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            currentlyVisiblePageCount += 1
-                        }
+                        withAnimation(.easeInOut(duration: 0.2)) { currentlyVisiblePageCount += 1 }
                     } label: {
                         HStack(spacing: 6) {
                             Text("Load more")
@@ -488,9 +508,7 @@ struct PaginatedPassengerSummaryView: View {
     private func passengerSummaryRow(row: PassengerTripSummaryRow) -> some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle()
-                    .fill(Color.brandAccent.opacity(0.12))
-                    .frame(width: 36, height: 36)
+                Circle().fill(Color.brandAccent.opacity(0.12)).frame(width: 36, height: 36)
                 Text(String(row.passengerFullName.prefix(1)))
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Color.brandAccent)
@@ -517,45 +535,32 @@ struct PaginatedPassengerSummaryView: View {
 
     private func pickedUpBadge(wasPickedUp: Bool) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: wasPickedUp ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .font(.system(size: 9))
-            Text(wasPickedUp ? "Boarded" : "Not Boarded")
-                .font(.system(size: 10, weight: .semibold))
+            Image(systemName: wasPickedUp ? "checkmark.circle.fill" : "xmark.circle.fill").font(.system(size: 9))
+            Text(wasPickedUp ? "Boarded" : "Not Boarded").font(.system(size: 10, weight: .semibold))
         }
         .foregroundStyle(wasPickedUp ? Color.statusActive : Color.statusDanger)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
+        .padding(.horizontal, 7).padding(.vertical, 3)
         .background((wasPickedUp ? Color.statusActive : Color.statusDanger).opacity(0.1))
         .clipShape(Capsule())
     }
 
     private func attendanceBadge(status: String) -> some View {
         let isAttending = status == "attending"
-        let isAbsent = status == "absent"
-        let color: Color = isAttending ? Color.brandAccent : (isAbsent ? Color.statusWarning : Color.textTertiary)
-        let label = isAttending ? "Attending" : (isAbsent ? "Absent" : "Not Marked")
-
+        let color: Color = isAttending ? Color.brandAccent : (status == "absent" ? Color.statusWarning : Color.textTertiary)
+        let label = isAttending ? "Attending" : (status == "absent" ? "Absent" : "Not Marked")
         return Text(label)
             .font(.system(size: 9, weight: .medium))
             .foregroundStyle(color)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.horizontal, 6).padding(.vertical, 2)
             .background(color.opacity(0.1))
             .clipShape(Capsule())
     }
 }
 
-// Supporting row model for the completion overlay
 struct PassengerTripSummaryRow: Identifiable {
     let id = UUID()
     let passengerFullName: String
     let boardingStopName: String
     let attendanceStatusLabel: String
     let wasPickedUp: Bool
-}
-
-// Equatable wrapper used to observe coordinate changes in onChange
-private struct LatLon: Equatable {
-    let lat: CLLocationDegrees
-    let lon: CLLocationDegrees
 }

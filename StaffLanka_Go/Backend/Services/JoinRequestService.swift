@@ -57,4 +57,55 @@ final class JoinRequestService {
         try await db.collection(collection).document(requestId).updateData(["status": status])
         print("🟢 [JoinRequestService] Request \(requestId) updated to '\(status)'")
     }
+
+    // Passenger: fetch accepted (enrolled) requests
+
+    func fetchAcceptedRequests(passengerId: String) async throws -> [JoinRequestModel] {
+        let snapshot = try await db.collection(collection)
+            .whereField("passengerId", isEqualTo: passengerId)
+            .whereField("status", isEqualTo: "accepted")
+            .getDocuments()
+        let results = snapshot.documents.compactMap { doc -> JoinRequestModel? in
+            var model = try? doc.data(as: JoinRequestModel.self)
+            model?.id = doc.documentID
+            return model
+        }
+        print("🟢 [JoinRequestService] fetchAcceptedRequests — \(results.count) accepted request(s) for passenger \(passengerId)")
+        return results
+    }
+
+    // Passenger: real-time listener for own requests (accepted or cancelled)
+
+    func listenForPassengerRequests(
+        passengerId: String,
+        onChange: @escaping ([JoinRequestModel]) -> Void
+    ) -> ListenerRegistration {
+        print("🔵 [JoinRequestService] Attaching passenger listener for passengerId: \(passengerId)")
+        return db.collection(collection)
+            .whereField("passengerId", isEqualTo: passengerId)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("🔴 [JoinRequestService] Passenger listener error: \(error.localizedDescription)")
+                    return
+                }
+                guard let docs = snapshot?.documents else { return }
+                let requests = docs.compactMap { doc -> JoinRequestModel? in
+                    var model = try? doc.data(as: JoinRequestModel.self)
+                    model?.id = doc.documentID
+                    return model
+                }
+                print("🟢 [JoinRequestService] Passenger listener fired — \(requests.count) total request(s)")
+                onChange(requests)
+            }
+    }
+
+    // Passenger: cancel an accepted enrollment
+
+    func cancelEnrollment(requestId: String) async throws {
+        try await db.collection(collection).document(requestId).updateData([
+            "status": "cancelled",
+            "cancelledAt": Timestamp(date: Date())
+        ])
+        print("🟢 [JoinRequestService] Enrollment \(requestId) cancelled by passenger")
+    }
 }

@@ -58,39 +58,36 @@ final class TripService {
         ])
     }
 
-    // Passenger: listen for an active trip on this route + session
-
-    // Fires whenever a trip document for this route+session changes (active → completed).
+    // Passenger: listen for an active trip driven by a specific driver
+    // Queries driverId + status == "active" — requires no composite index
     func listenForActiveTrip(
-        routeId: String,
+        driverId: String,
         session: String,
         onChange: @escaping (TripModel?) -> Void
     ) -> ListenerRegistration {
-        let today = Calendar.current.startOfDay(for: Date())
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
-
-        print("🔵 [TripService] Attaching trip listener for routeId: \(routeId) session: \(session)")
+        print("🔵 [TripService] Attaching trip listener — driverId: \(driverId) session: \(session)")
         return db.collection(collection)
-            .whereField("routeId", isEqualTo: routeId)
-            .whereField("session", isEqualTo: session)
-            .whereField("tripDate", isGreaterThanOrEqualTo: Timestamp(date: today))
-            .whereField("tripDate", isLessThan: Timestamp(date: tomorrow))
+            .whereField("driverId", isEqualTo: driverId)
+            .whereField("status", isEqualTo: "active")
             .addSnapshotListener { snapshot, error in
                 if let error = error {
                     print("🔴 [TripService] Listener error: \(error.localizedDescription)")
                     onChange(nil)
                     return
                 }
-                // Take the most recent trip for today
                 let trips = snapshot?.documents.compactMap { doc -> TripModel? in
                     var model = try? doc.data(as: TripModel.self)
                     model?.id = doc.documentID
                     return model
                 } ?? []
-                let active = trips.first(where: { $0.status == "active" })
-                    ?? trips.sorted(by: { $0.startedAt > $1.startedAt }).first
-                print("🟢 [TripService] Listener fired — status: \(active?.status ?? "none")")
-                onChange(active)
+                // Pick the trip matching today's session; fall back to any active trip
+                let today = Calendar.current.startOfDay(for: Date())
+                let todayTrip = trips.first(where: {
+                    $0.session == session &&
+                    Calendar.current.startOfDay(for: $0.tripDate) == today
+                }) ?? trips.first
+                print("🟢 [TripService] Listener fired — \(trips.count) active trips, matched: \(todayTrip?.id ?? "none") status: \(todayTrip?.status ?? "none")")
+                onChange(todayTrip)
             }
     }
 

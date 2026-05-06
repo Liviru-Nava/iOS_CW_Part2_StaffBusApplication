@@ -7,11 +7,13 @@
 
 import SwiftUI
 import MapKit
+import FirebaseAuth
 
 struct DriverDashboardView: View {
 
     @StateObject private var dashboardViewModel = DriverDashboardViewModel()
     @State private var showRouteMapFullScreen: Bool = false
+    @State private var showTripSimulation: Bool = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -34,6 +36,14 @@ struct DriverDashboardView: View {
                 isPresented: $showRouteMapFullScreen,
                 sessionType: dashboardViewModel.selectedSessionType,
                 routeData: dashboardViewModel.fetchedRouteData
+            )
+        }
+        .fullScreenCover(isPresented: $showTripSimulation) {
+            DriverTripSimulationView(
+                routeId: dashboardViewModel.currentRouteId,
+                driverId: FirebaseAuth.Auth.auth().currentUser?.uid ?? "",
+                sessionLabel: dashboardViewModel.selectedSessionType == .morning ? "Morning" : "Evening",
+                enrolledPassengers: []
             )
         }
     }
@@ -180,8 +190,8 @@ struct DriverDashboardView: View {
 
             HStack(spacing: 12) {
                 Button {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                        dashboardViewModel.startTrip()
+                    if dashboardViewModel.isStartTripButtonEnabled {
+                        showTripSimulation = true
                     }
                 } label: {
                     HStack(spacing: 8) {
@@ -222,16 +232,7 @@ struct DriverDashboardView: View {
                 .buttonStyle(.plain)
             }
 
-            if !dashboardViewModel.isStartTripButtonEnabled {
-                HStack(spacing: 5) {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.statusWarning)
-                    Text("Start is available within the scheduled window only")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.textTertiary)
-                }
-            }
+
         }
         .padding(18)
         .background(Color.cardBackground)

@@ -9,6 +9,7 @@ import Foundation
 import SwiftUI
 import Combine
 import FirebaseAuth
+import FirebaseFirestore
 import CoreLocation
 import MapKit
 
@@ -77,6 +78,11 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
     @Published var currentUserLocation: CLLocationCoordinate2D?
     @Published var isNearEndingLocation: Bool = false
 
+    // Firestore trip tracking
+    private(set) var currentRouteId: String = ""
+    private var activeTripId: String? = nil
+    private var locationUpdateTimer: Timer? = nil
+
     override init() {
         super.init()
         self.locationManager.delegate = self
@@ -142,14 +148,7 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
         }
     }
 
-    var isStartTripButtonEnabled: Bool {
-        let currentHour = Calendar.current.component(.hour, from: Date())
-        if selectedSessionType == .morning {
-            return currentHour >= 5 && currentHour < 10
-        } else {
-            return currentHour >= 15 && currentHour < 20
-        }
-    }
+    var isStartTripButtonEnabled: Bool { true }
 
     var totalPassengersForCurrentSummary: Int {
         currentSessionSummaryStopRecords.reduce(0) { $0 + $1.passengersPickedUp }
@@ -162,7 +161,25 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
             eveningTripState = .duringTrip
         }
         locationManager.startUpdatingLocation()
-        
+
+        // Persist to Firestore
+        let session = selectedSessionType == .morning ? "Morning" : "Evening"
+        guard let userId = Auth.auth().currentUser?.uid, !currentRouteId.isEmpty else { return }
+        Task {
+            do {
+                let tripId = try await TripService.shared.startTrip(
+                    routeId: currentRouteId,
+                    driverId: userId,
+                    session: session
+                )
+                self.activeTripId = tripId
+                self.startLocationUpdateTimer()
+                print("🟢 [DriverDashboardVM] Trip started, tripId: \(tripId)")
+            } catch {
+                print("🔴 [DriverDashboardVM] startTrip Firestore error: \(error.localizedDescription)")
+            }
+        }
+
         NotificationManager.shared.scheduleNotification(
             title: "Trip Started",
             body: "Your \(selectedSessionType == .morning ? "morning" : "evening") session has officially begun.",
@@ -178,13 +195,44 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
             eveningTripState = .afterTrip
         }
         locationManager.stopUpdatingLocation()
-        
+        stopLocationUpdateTimer()
+
+        // Persist to Firestore
+        if let tripId = activeTripId {
+            Task {
+                do {
+                    try await TripService.shared.finishTrip(tripId: tripId)
+                    print("🟢 [DriverDashboardVM] Trip finished, tripId: \(tripId)")
+                } catch {
+                    print("🔴 [DriverDashboardVM] finishTrip Firestore error: \(error.localizedDescription)")
+                }
+            }
+            activeTripId = nil
+        }
+
         NotificationManager.shared.scheduleNotification(
             title: "Trip Completed",
             body: "You have arrived at the destination. Well done!",
             actionType: "TRIP_END",
             isTripAlert: true
         )
+    }
+
+    // Location update timer (pushes GPS to Firestore every 5 s)
+
+    private func startLocationUpdateTimer() {
+        locationUpdateTimer?.invalidate()
+        locationUpdateTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            guard let self, let coord = self.currentUserLocation, let tripId = self.activeTripId else { return }
+            Task {
+                try? await TripService.shared.updateDriverLocation(tripId: tripId, location: coord)
+            }
+        }
+    }
+
+    private func stopLocationUpdateTimer() {
+        locationUpdateTimer?.invalidate()
+        locationUpdateTimer = nil
     }
 
     func selectSession(_ session: SessionType) {
@@ -202,6 +250,7 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
                 
                 do {
                     let routeId = driver.assignedRouteId
+                    self.currentRouteId = routeId
                     let route = try await RouteService.shared.fetchRoute(routeId: routeId)
                     self.fetchedRouteData = route
                     let timeFormatter = DateFormatter()

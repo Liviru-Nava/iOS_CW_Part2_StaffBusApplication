@@ -32,7 +32,7 @@ struct DriverTripDetailView: View {
                 performanceSummarySection
                 if selectedDetailDisplayMode == .textView {
                     stopsTimelineSection
-                    passengerAttendanceSection
+//                    passengerAttendanceSection
                 } else {
                     mapPlaceholderSection
                 }
@@ -306,66 +306,9 @@ struct DriverTripDetailView: View {
         .clipShape(Capsule())
     }
 
-    private var passengerAttendanceSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeaderLabel(titleText: "Passenger Pickups", iconName: "person.2.fill")
-
-            VStack(spacing: 0) {
-                ForEach(Array(tripRecord.passengerPickupList.enumerated()), id: \.element.id) { index, passengerRecord in
-                    passengerPickupRow(passengerRecord: passengerRecord)
-                    if index < tripRecord.passengerPickupList.count - 1 {
-                        Divider()
-                            .padding(.horizontal, 16)
-                    }
-                }
-            }
-            .background(Color.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-        }
-    }
-
-    private func passengerPickupRow(passengerRecord: DriverTripPassengerPickupRecord) -> some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(Color.brandAccent.opacity(0.12))
-                    .frame(width: 38, height: 38)
-                Text(String(passengerRecord.passengerFullName.prefix(1)))
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Color.brandAccent)
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(passengerRecord.passengerFullName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.textPrimary)
-                HStack(spacing: 5) {
-                    Image(systemName: "mappin.fill")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color.brandAccent)
-                    Text(passengerRecord.boardingStopName)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.textSecondary)
-                }
-            }
-
-            Spacer()
-
-            HStack(spacing: 4) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 11))
-                Text("Boarded")
-                    .font(.system(size: 11, weight: .semibold))
-            }
-            .foregroundStyle(Color.statusActive)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.statusActive.opacity(0.11))
-            .clipShape(Capsule())
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
+//    private var passengerAttendanceSection: some View {
+//        PaginatedTripPassengerDetailView(passengerPickupList: tripRecord.passengerPickupList)
+//    }
 
     private var mapPlaceholderSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -414,16 +357,152 @@ struct DriverTripDetailView: View {
     }
 }
 
+// Paginated passenger detail — shows boarded vs not-boarded with a Load More button
+struct PaginatedTripPassengerDetailView: View {
+
+    let passengerPickupList: [DriverTripPassengerPickupRecord]
+
+    private let rowsPerPage = 10
+    @State private var visiblePageCount = 1
+
+    private var boardedPassengers: [DriverTripPassengerPickupRecord] { passengerPickupList }
+    private var notBoardedPassengers: [DriverTripPassengerPickupRecord] = []
+
+    private var allRows: [DriverTripPassengerPickupRecord] { boardedPassengers + notBoardedPassengers }
+    private var visibleRows: [DriverTripPassengerPickupRecord] { Array(allRows.prefix(visiblePageCount * rowsPerPage)) }
+    private var hasMoreToShow: Bool { visibleRows.count < allRows.count }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.brandAccent)
+                Text("Passenger Pickups")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color.textPrimary)
+                Spacer()
+                Text("\(boardedPassengers.count) boarded")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.statusActive)
+            }
+
+            if allRows.isEmpty {
+                Text("No passengers enrolled for this session.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.textTertiary)
+                    .padding(.vertical, 14)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .background(Color.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(visibleRows.enumerated()), id: \.element.id) { rowIndex, passengerRecord in
+                        passengerDetailRow(record: passengerRecord, isBoarded: boardedPassengers.contains { $0.id == passengerRecord.id })
+                        if rowIndex < visibleRows.count - 1 {
+                            Divider().padding(.horizontal, 16)
+                        }
+                    }
+                }
+                .background(Color.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+
+                if hasMoreToShow {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { visiblePageCount += 1 }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text("Load more")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("(\(allRows.count - visibleRows.count) remaining)")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color.textTertiary)
+                        }
+                        .foregroundStyle(Color.brandAccent)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.brandAccent.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func passengerDetailRow(record: DriverTripPassengerPickupRecord, isBoarded: Bool) -> some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(Color.brandAccent.opacity(0.12))
+                    .frame(width: 38, height: 38)
+                Text(String(record.passengerFullName.prefix(1)))
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color.brandAccent)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(record.passengerFullName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.textPrimary)
+                HStack(spacing: 4) {
+                    Image(systemName: "mappin.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.brandAccent)
+                    Text(record.boardingStopName)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.textSecondary)
+                }
+            }
+            Spacer()
+            HStack(spacing: 4) {
+                Image(systemName: isBoarded ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .font(.system(size: 11))
+                Text(isBoarded ? "Boarded" : "Not Boarded")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundStyle(isBoarded ? Color.statusActive : Color.statusDanger)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background((isBoarded ? Color.statusActive : Color.statusDanger).opacity(0.11))
+            .clipShape(Capsule())
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+}
+
 #Preview("Dark") {
     NavigationStack {
-        DriverTripDetailView(tripRecord: DriverHistoryTripRecord.mockDriverTrips[0])
+        DriverTripDetailView(tripRecord: DriverHistoryTripRecord(
+            tripDate: Date(),
+            sessionType: .morning,
+            completionStatus: .autoCompleted,
+            scheduledStartTime: "06:30 AM",
+            actualEndTime: "07:00 AM",
+            stopsTimeline: [],
+            passengerPickupList: [],
+            performanceSummary: DriverTripPerformanceSummary(
+                totalStopCount: 6, completedStopCount: 6,
+                totalPassengersPickedUp: 3, tripDurationInMinutes: 2)
+        ))
     }
     .preferredColorScheme(.dark)
 }
 
 #Preview("Light") {
     NavigationStack {
-        DriverTripDetailView(tripRecord: DriverHistoryTripRecord.mockDriverTrips[0])
+        DriverTripDetailView(tripRecord: DriverHistoryTripRecord(
+            tripDate: Date(),
+            sessionType: .morning,
+            completionStatus: .autoCompleted,
+            scheduledStartTime: "06:30 AM",
+            actualEndTime: "07:00 AM",
+            stopsTimeline: [],
+            passengerPickupList: [],
+            performanceSummary: DriverTripPerformanceSummary(
+                totalStopCount: 6, completedStopCount: 6,
+                totalPassengersPickedUp: 3, tripDurationInMinutes: 2)
+        ))
     }
     .preferredColorScheme(.light)
 }
