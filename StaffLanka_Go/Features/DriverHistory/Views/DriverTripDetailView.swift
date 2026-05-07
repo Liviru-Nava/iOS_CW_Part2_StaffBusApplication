@@ -12,11 +12,11 @@ struct DriverTripDetailView: View {
     @State private var selectedDetailDisplayMode: DriverTripDetailDisplayMode = .textView
 
     private var sessionDisplayColor: Color {
-        tripRecord.sessionType == .morning ? Color.statusWarning : Color.brandAccent
+        tripRecord.sessionType == "Morning" ? Color.statusWarning : Color.brandAccent
     }
 
     private var sessionIconName: String {
-        tripRecord.sessionType == .morning ? "sunrise.fill" : "moon.fill"
+        tripRecord.sessionType == "Morning" ? "sunrise.fill" : "moon.fill"
     }
 
     private var completionStatusColor: Color {
@@ -62,7 +62,7 @@ struct DriverTripDetailView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(tripRecord.sessionType == .morning ? "Morning Trip" : "Evening Trip")
+                        Text(tripRecord.sessionType == "Morning" ? "Morning Trip" : "Evening Trip")
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(Color.white)
                         Text(tripRecord.tripDate.formatted(date: .long, time: .omitted))
@@ -471,38 +471,38 @@ struct PaginatedTripPassengerDetailView: View {
     }
 }
 
-#Preview("Dark") {
-    NavigationStack {
-        DriverTripDetailView(tripRecord: DriverHistoryTripRecord(
-            tripDate: Date(),
-            sessionType: .morning,
-            completionStatus: .autoCompleted,
-            scheduledStartTime: "06:30 AM",
-            actualEndTime: "07:00 AM",
-            stopsTimeline: [],
-            passengerPickupList: [],
-            performanceSummary: DriverTripPerformanceSummary(
-                totalStopCount: 6, completedStopCount: 6,
-                totalPassengersPickedUp: 3, tripDurationInMinutes: 2)
-        ))
-    }
-    .preferredColorScheme(.dark)
-}
-
-#Preview("Light") {
-    NavigationStack {
-        DriverTripDetailView(tripRecord: DriverHistoryTripRecord(
-            tripDate: Date(),
-            sessionType: .morning,
-            completionStatus: .autoCompleted,
-            scheduledStartTime: "06:30 AM",
-            actualEndTime: "07:00 AM",
-            stopsTimeline: [],
-            passengerPickupList: [],
-            performanceSummary: DriverTripPerformanceSummary(
-                totalStopCount: 6, completedStopCount: 6,
-                totalPassengersPickedUp: 3, tripDurationInMinutes: 2)
-        ))
-    }
-    .preferredColorScheme(.light)
-}
+//#Preview("Dark") {
+//    NavigationStack {
+//        DriverTripDetailView(tripRecord: DriverHistoryTripRecord(
+//            tripDate: Date(),
+//            sessionType: .morning,
+//            completionStatus: .autoCompleted,
+//            scheduledStartTime: "06:30 AM",
+//            actualEndTime: "07:00 AM",
+//            stopsTimeline: [],
+//            passengerPickupList: [],
+//            performanceSummary: DriverTripPerformanceSummary(
+//                totalStopCount: 6, completedStopCount: 6,
+//                totalPassengersPickedUp: 3, tripDurationInMinutes: 2)
+//        ))
+//    }
+//    .preferredColorScheme(.dark)
+//}
+//
+//#Preview("Light") {
+//    NavigationStack {
+//        DriverTripDetailView(tripRecord: DriverHistoryTripRecord(
+//            tripDate: Date(),
+//            sessionType: .morning,
+//            completionStatus: .autoCompleted,
+//            scheduledStartTime: "06:30 AM",
+//            actualEndTime: "07:00 AM",
+//            stopsTimeline: [],
+//            passengerPickupList: [],
+//            performanceSummary: DriverTripPerformanceSummary(
+//                totalStopCount: 6, completedStopCount: 6,
+//                totalPassengersPickedUp: 3, tripDurationInMinutes: 2)
+//        ))
+//    }
+//    .preferredColorScheme(.light)
+//}

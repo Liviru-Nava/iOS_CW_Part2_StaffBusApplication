@@ -244,8 +244,8 @@ final class PassengerEnrolledServicesViewModel: ObservableObject {
         return EnrolledService(
             id:         docId,
             routeName:  "\(route.startLocation.locationName) → \(route.endLocation.locationName)",
-            routeStart: route.startLocation.locationName,
-            routeEnd:   route.endLocation.locationName,
+            routeStart: req.pickupStop,
+            routeEnd:   req.dropoffStop,
             session:    sessionType,
             morning:    sessionType == .both || sessionType == .morning ? morningInfo : nil,
             evening:    sessionType == .both || sessionType == .evening ? eveningInfo : nil,

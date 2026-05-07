@@ -50,16 +50,20 @@ final class TripService {
     // Driver: update live location
 
     // Called every ~5 seconds while a trip is active.
-    func updateDriverLocation(tripId: String, location: CLLocationCoordinate2D) async throws {
-        try await db.collection(collection).document(tripId).updateData([
+    func updateDriverLocation(tripId: String, location: CLLocationCoordinate2D, currentStopIndex: Int? = nil) async throws {
+        var data: [String: Any] = [
             "driverLatitude":    location.latitude,
             "driverLongitude":   location.longitude,
             "locationUpdatedAt": Timestamp(date: Date())
-        ])
+        ]
+        if let currentStopIndex {
+            data["currentStopIndex"] = currentStopIndex
+        }
+        try await db.collection(collection).document(tripId).updateData(data)
     }
 
-    // Passenger: listen for an active trip driven by a specific driver
-    // Queries driverId + status == "active" — requires no composite index
+    // Passenger: listen for today's trip for a specific driver + session
+    // Queries by driverId only (no composite index needed), filters by today + session in Swift
     func listenForActiveTrip(
         driverId: String,
         session: String,
@@ -68,7 +72,6 @@ final class TripService {
         print("🔵 [TripService] Attaching trip listener — driverId: \(driverId) session: \(session)")
         return db.collection(collection)
             .whereField("driverId", isEqualTo: driverId)
-            .whereField("status", isEqualTo: "active")
             .addSnapshotListener { snapshot, error in
                 if let error = error {
                     print("🔴 [TripService] Listener error: \(error.localizedDescription)")
@@ -80,13 +83,14 @@ final class TripService {
                     model?.id = doc.documentID
                     return model
                 } ?? []
-                // Pick the trip matching today's session; fall back to any active trip
+
+                // Only consider trips from TODAY that match this session — never fall back to other days
                 let today = Calendar.current.startOfDay(for: Date())
                 let todayTrip = trips.first(where: {
                     $0.session == session &&
                     Calendar.current.startOfDay(for: $0.tripDate) == today
-                }) ?? trips.first
-                print("🟢 [TripService] Listener fired — \(trips.count) active trips, matched: \(todayTrip?.id ?? "none") status: \(todayTrip?.status ?? "none")")
+                })
+                print("🟢 [TripService] Listener fired — \(trips.count) total, today's \(session): \(todayTrip?.status ?? "none") id: \(todayTrip?.id ?? "none")")
                 onChange(todayTrip)
             }
     }
@@ -117,5 +121,36 @@ final class TripService {
                 model?.id = snapshot?.documentID
                 onChange(model)
             }
+    }
+
+    // Trip History Persistence
+
+    func saveTripHistoryRecord(_ record: DriverHistoryTripRecord) async throws {
+        let _ = try db.collection("tripHistory").addDocument(from: record)
+        print("🟢 [TripService] Saved trip history record for route: \(record.routeId)")
+    }
+
+    func fetchDriverTripHistory(driverId: String) async throws -> [DriverHistoryTripRecord] {
+        let snapshot = try await db.collection("tripHistory")
+            .whereField("driverId", isEqualTo: driverId)
+            .getDocuments()
+        
+        return snapshot.documents.compactMap { doc in
+            var record = try? doc.data(as: DriverHistoryTripRecord.self)
+            record?.id = doc.documentID
+            return record
+        }.sorted { $0.tripDate > $1.tripDate }
+    }
+
+    func fetchPassengerTripHistory(routeId: String) async throws -> [DriverHistoryTripRecord] {
+        let snapshot = try await db.collection("tripHistory")
+            .whereField("routeId", isEqualTo: routeId)
+            .getDocuments()
+        
+        return snapshot.documents.compactMap { doc in
+            var record = try? doc.data(as: DriverHistoryTripRecord.self)
+            record?.id = doc.documentID
+            return record
+        }.sorted { $0.tripDate > $1.tripDate }
     }
 }

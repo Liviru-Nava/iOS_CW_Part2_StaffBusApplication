@@ -107,10 +107,34 @@ struct PassengerEnrolledServicesView: View {
 
     private func activeServiceCard(_ service: EnrolledService) -> some View {
         VStack(spacing: 0) {
+
+            // Route header (shared for all sessions)
             routeHeader(service, dimmed: false)
 
             Divider().background(Color.divider).padding(.horizontal, 16)
 
+            // Common info block — monthly fee shown once
+            HStack(spacing: 12) {
+                Image(systemName: "creditcard.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(.brandAccent)
+                    .frame(width: 18)
+                Text("Monthly Fee")
+                    .font(.system(size: 13))
+                    .foregroundColor(.textTertiary)
+                    .frame(width: 80, alignment: .leading)
+                Text(String(format: "Rs. %.0f / month", service.monthlyFee))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.textPrimary)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.brandAccent.opacity(0.04))
+
+            Divider().background(Color.divider).padding(.horizontal, 16)
+
+            // Per-session blocks
             if let morning = service.morning {
                 sessionBlock(info: morning, label: "Morning", icon: "sunrise.fill",
                              iconColor: .statusWarning, service: service, sessionType: .morning)
@@ -125,9 +149,22 @@ struct PassengerEnrolledServicesView: View {
                              iconColor: .brandAccent, service: service, sessionType: .evening)
             }
 
-            Divider().background(Color.divider).padding(.horizontal, 16)
-
-            feeAndCancelFooter(service)
+            // Cancel footer (for .both, single cancel button at bottom)
+            if service.session == .both {
+                Divider().background(Color.divider).padding(.horizontal, 16)
+                HStack {
+                    Spacer()
+                    Button(role: .destructive) {
+                        passengerEnrolledServiceViewModel.requestCancelOptions(service: service)
+                    } label: {
+                        cancelLabel("Cancel Enrollment")
+                    }
+                    .buttonStyle(.plain)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+            }
         }
         .background(Color.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18))
@@ -194,17 +231,9 @@ struct PassengerEnrolledServicesView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(service.routeStart)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(dimmed ? .textSecondary : .textPrimary)
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.textTertiary)
-                    Text(service.routeEnd)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(dimmed ? .textSecondary : .textPrimary)
-                }
+                Text(service.routeName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(dimmed ? .textSecondary : .textPrimary)
                 HStack(spacing: 6) {
                     Text(passengerEnrolledServiceViewModel.sessionLabel(service.session))
                         .font(.system(size: 12, weight: .medium))

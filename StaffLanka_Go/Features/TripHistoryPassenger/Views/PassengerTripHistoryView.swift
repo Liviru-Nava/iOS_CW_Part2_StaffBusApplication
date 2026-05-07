@@ -27,6 +27,9 @@ struct PassengerTripHistoryView: View {
         .background(Color.appBackground)
         .navigationTitle("Trip History")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            tripHistoryViewModel.fetchHistory()
+        }
         .sheet(item: $tripHistoryViewModel.selectedRecord) { record in
             TripDayDetailSheet(record: record)
         }
@@ -42,7 +45,7 @@ struct PassengerTripHistoryView: View {
                 bannerDivider
                 summaryCell(value: "\(tripHistoryViewModel.totalTripsSkipped)", label: "Skipped")
                 bannerDivider
-                summaryCell(value: "\(tripHistoryViewModel.attendanceRate)%", label: "Rate")
+                summaryCell(value: "\(tripHistoryViewModel.averageTravelTime)m", label: "Avg Time")
             }
             .padding(.vertical, 20)
         }

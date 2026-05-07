@@ -23,6 +23,7 @@ struct TripModel: Codable, Identifiable {
     var driverLatitude: Double?    // updated every ~5 s while active
     var driverLongitude: Double?
     var locationUpdatedAt: Date?
+    var currentStopIndex: Int?     // updated as the driver reaches each stop in the simulation
 
     var driverCoordinate: CLLocationCoordinate2D? {
         guard let lat = driverLatitude, let lon = driverLongitude else { return nil }

@@ -16,9 +16,12 @@ import UserNotifications
 final class PassengerDashboardViewModel: ObservableObject {
 
     // Published state
-
     @Published var userName: String = ""
-    @Published var selectedTrip: TripTab = .morning
+    @Published var selectedTrip: TripTab
+
+    init() {
+        self.selectedTrip = Calendar.current.component(.hour, from: Date()) < 12 ? .morning : .evening
+    }
 
     // Accepted enrollment per session
     @Published var morningService: EnrolledService? = nil
@@ -62,15 +65,99 @@ final class PassengerDashboardViewModel: ObservableObject {
         selectedTrip == .morning ? morningTrip : eveningTrip
     }
 
-    var isTripActive: Bool { currentTrip?.status == "active" }
-    var isTripCompleted: Bool { currentTrip?.status == "completed" }
-
-    var currentAttendance: AttendanceModel? {
-        selectedTrip == .morning ? morningAttendance : eveningAttendance
+    // Only treat a trip as active/completed when it belongs to TODAY
+    var isTripActive: Bool {
+        guard let trip = currentTrip, trip.status == "active" else { return false }
+        return Calendar.current.isDateInToday(trip.tripDate)
+    }
+    var isTripCompleted: Bool {
+        guard let trip = currentTrip, trip.status == "completed" else { return false }
+        return Calendar.current.isDateInToday(trip.tripDate)
     }
 
-    // Attendance can be changed when the trip is not yet completed (either before or during)
-    var canChangeAttendance: Bool { !isTripCompleted }
+    // Attendance window
+    private enum AttendanceWindowState {
+        case morningWindowAvailable
+        case morningWindowLocked
+        case eveningWindowAvailable
+        case eveningWindowLocked
+        case tomorrowMorningAvailable
+        case outsideWindow
+    }
+
+    private var attendanceWindowState: AttendanceWindowState {
+        let inMorningWindow = Calendar.current.component(.hour, from: Date()) < 12
+        switch selectedTrip {
+        case .morning:
+            if inMorningWindow {
+                let isPassed = (morningTrip?.currentStopIndex ?? 0) > 3
+                if isPassed || isTripCompleted { return .morningWindowLocked }
+                return .morningWindowAvailable
+            }
+            // Evening time on morning tab — unlock tomorrow only if today's evening trip completed
+            let eveningDone = eveningTrip != nil
+                && eveningTrip!.status == "completed"
+                && Calendar.current.isDateInToday(eveningTrip!.tripDate)
+            return eveningDone ? .tomorrowMorningAvailable : .outsideWindow
+        case .evening:
+            if !inMorningWindow {
+                let isPassed = (eveningTrip?.currentStopIndex ?? 0) > 3
+                if isPassed || isTripCompleted { return .eveningWindowLocked }
+                return .eveningWindowAvailable
+            }
+            return .outsideWindow
+        }
+    }
+
+    // Flat properties used by the View — no nested enum exposed
+    var isAttendanceOutsideWindow: Bool { attendanceWindowState == .outsideWindow }
+    var isAttendanceLocked: Bool {
+        attendanceWindowState == .morningWindowLocked || attendanceWindowState == .eveningWindowLocked
+    }
+    var isAttendanceTomorrow: Bool { attendanceWindowState == .tomorrowMorningAvailable }
+    var attendanceSectionTitle: String { isAttendanceTomorrow ? "Tomorrow's Attendance" : "Today's Attendance" }
+
+    var canChangeAttendance: Bool {
+        switch attendanceWindowState {
+        case .morningWindowAvailable, .eveningWindowAvailable, .tomorrowMorningAvailable: return true
+        default: return false
+        }
+    }
+
+    var attendanceWindowMessage: String {
+        switch attendanceWindowState {
+        case .morningWindowAvailable:
+            return isTripActive
+                ? "Update before your driver reaches your stop"
+                : "Mark your attendance for today's morning trip"
+        case .morningWindowLocked:
+            return "Attendance locked \u{2014} bus has passed your stop or trip is completed"
+        case .eveningWindowAvailable:
+            return isTripActive
+                ? "Update before your driver reaches your stop"
+                : "Mark your attendance for today's evening trip"
+        case .eveningWindowLocked:
+            return "Attendance locked \u{2014} bus has passed your stop or trip is completed"
+        case .tomorrowMorningAvailable:
+            return "Mark your attendance for tomorrow's morning trip"
+        case .outsideWindow where selectedTrip == .morning:
+            return "Morning attendance is only available 12:00 AM \u{2013} 11:59 AM"
+        default:
+            return "Evening attendance is only available 12:00 PM \u{2013} 11:59 PM"
+        }
+    }
+
+    var currentAttendanceDate: Date {
+        if isAttendanceTomorrow {
+            return Calendar.current.startOfDay(for: Calendar.current.date(byAdding: .day, value: 1, to: Date())!)
+        }
+        return Calendar.current.startOfDay(for: Date())
+    }
+
+    var currentAttendance: AttendanceModel? {
+        if isAttendanceOutsideWindow { return nil }
+        return selectedTrip == .morning ? morningAttendance : eveningAttendance
+    }
 
     var noServiceTitle: String {
         selectedTrip == .morning ? "No Morning Service" : "No Evening Service"
@@ -389,8 +476,8 @@ final class PassengerDashboardViewModel: ObservableObject {
         return EnrolledService(
             id: docId,
             routeName:  "\(route.startLocation.locationName) → \(route.endLocation.locationName)",
-            routeStart: route.startLocation.locationName,
-            routeEnd:   route.endLocation.locationName,
+            routeStart: req.pickupStop,
+            routeEnd:   req.dropoffStop,
             session:    sessionType,
             morning:    sessionType == .both || sessionType == .morning ? morningInfo : nil,
             evening:    sessionType == .both || sessionType == .evening ? eveningInfo : nil,

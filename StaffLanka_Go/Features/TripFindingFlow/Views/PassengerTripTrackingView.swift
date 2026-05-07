@@ -46,7 +46,7 @@ struct PassengerTripTrackingView: View {
         .onAppear { vm.startListening() }
     }
 
-    // MARK: - Map
+    // Map
 
     private var mapLayer: some View {
         Map(position: $vm.cameraPosition) {
@@ -94,7 +94,7 @@ struct PassengerTripTrackingView: View {
         .mapStyle(.standard(elevation: .realistic))
     }
 
-    // MARK: - Header overlay
+    // Header overlay
 
     private var headerOverlay: some View {
         VStack(spacing: 0) {
@@ -177,7 +177,7 @@ struct PassengerTripTrackingView: View {
         }
     }
 
-    // MARK: - Trip completed overlay
+    // Trip completed overlay
 
     private var completedOverlay: some View {
         ZStack {

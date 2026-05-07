@@ -137,11 +137,9 @@ struct PassengerDashboard: View {
                     Image(systemName: "bus.fill").font(.system(size: 18)).foregroundStyle(Color.brandAccent)
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(service.routeStart).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.textPrimary)
-                        Image(systemName: "arrow.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.textTertiary)
-                        Text(service.routeEnd).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.textPrimary)
-                    }
+                    Text(service.routeName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.textPrimary)
                     Text(sessionBadgeLabel(service.session))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color.brandAccent)
@@ -150,7 +148,6 @@ struct PassengerDashboard: View {
                         .clipShape(Capsule())
                 }
                 Spacer()
-                Image(systemName: "checkmark.circle.fill").font(.system(size: 20)).foregroundStyle(Color.statusActive)
             }
             .padding(16)
 
@@ -159,13 +156,17 @@ struct PassengerDashboard: View {
             // ── Session info ──
             let sessionInfo = passengerViewModel.selectedTrip == .morning ? service.morning : service.evening
             if let info = sessionInfo {
+                let isEvening = passengerViewModel.selectedTrip == .evening
+                let fromLabel = isEvening ? service.routeEnd   : service.routeStart
+                let toLabel   = isEvening ? service.routeStart : service.routeEnd
                 VStack(spacing: 10) {
-                    serviceInfoRow(icon: "person.fill",  label: "Driver",   value: info.driverName)
+                    serviceInfoRow(icon: "location.fill",        label: "From",   value: fromLabel)
+                    serviceInfoRow(icon: "mappin.circle.fill",    label: "To",     value: toLabel)
+                    serviceInfoRow(icon: "person.fill",           label: "Driver", value: info.driverName)
                     serviceInfoRow(icon: info.vehicleType.lowercased() == "van" ? "car.fill" : "bus.fill",
-                                   label: "Vehicle",  value: "\(info.vehicleBrand) \(info.vehicleType)")
-                    serviceInfoRow(icon: "rectangle.and.text.magnifyingglass", label: "Plate",   value: info.licensePlate)
-                    serviceInfoRow(icon: "clock.fill",   label: "Time",    value: "\(info.startTime) – \(info.endTime)")
-                    serviceInfoRow(icon: "creditcard.fill", label: "Monthly", value: String(format: "Rs. %.0f", service.monthlyFee))
+                                   label: "Vehicle", value: "\(info.vehicleBrand) \(info.vehicleType)")
+                    serviceInfoRow(icon: "rectangle.and.text.magnifyingglass", label: "Plate", value: info.licensePlate)
+                    serviceInfoRow(icon: "clock.fill",            label: "Time",   value: "\(info.startTime) – \(info.endTime)")
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
@@ -237,52 +238,67 @@ struct PassengerDashboard: View {
     private var attendanceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Image(systemName: "calendar.badge.checkmark")
+                Image(systemName: passengerViewModel.isAttendanceLocked
+                    ? "lock.fill"
+                    : passengerViewModel.isAttendanceOutsideWindow ? "clock.slash" : "calendar.badge.checkmark")
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.brandAccent)
-                Text("Tomorrow's Attendance")
+                    .foregroundStyle(
+                        passengerViewModel.isAttendanceOutsideWindow || passengerViewModel.isAttendanceLocked
+                            ? Color.textTertiary : Color.brandAccent)
+                Text(passengerViewModel.attendanceSectionTitle)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.textPrimary)
+                    .foregroundStyle(
+                        passengerViewModel.isAttendanceOutsideWindow || passengerViewModel.isAttendanceLocked
+                            ? Color.textTertiary : Color.textPrimary)
                 Spacer()
                 if let att = passengerViewModel.currentAttendance {
-                    Text(att.status == "attending" ? "Attending" : "Absent")
+                    let badgeLabel = att.status == "attending" ? "Attending"
+                        : att.status == "not_sure" ? "Not Sure" : "Absent"
+                    let badgeColor: Color = att.status == "attending" ? Color.statusActive
+                        : att.status == "not_sure" ? Color.statusWarning : Color.statusDanger
+                    Text(badgeLabel)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(att.status == "attending" ? Color.statusActive : Color.statusDanger)
+                        .foregroundStyle(badgeColor)
                         .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background((att.status == "attending" ? Color.statusActive : Color.statusDanger).opacity(0.1))
+                        .background(badgeColor.opacity(0.1))
                         .clipShape(Capsule())
-                } else {
+                } else if !passengerViewModel.isAttendanceOutsideWindow {
                     Text("Not marked")
                         .font(.system(size: 11))
                         .foregroundStyle(Color.textTertiary)
                 }
             }
 
-            HStack(spacing: 10) {
-                attendanceButton(title: "Attending", icon: "checkmark.circle.fill",
-                                 isSelected: passengerViewModel.currentAttendance?.status == "attending",
-                                 color: Color.statusActive) {
-                    passengerViewModel.markAttendance(status: "attending")
-                }
-                attendanceButton(title: "Mark Absent", icon: "xmark.circle.fill",
-                                 isSelected: passengerViewModel.currentAttendance?.status == "absent",
-                                 color: Color.statusDanger) {
-                    passengerViewModel.markAttendance(status: "absent")
-                }
-            }
+            Text(passengerViewModel.attendanceWindowMessage)
+                .font(.system(size: 11))
+                .foregroundStyle(
+                    passengerViewModel.isAttendanceOutsideWindow || passengerViewModel.isAttendanceLocked
+                        ? Color.textTertiary : Color.textSecondary)
 
-            if passengerViewModel.isTripCompleted {
-                HStack(spacing: 4) {
-                    Image(systemName: "lock.fill").font(.system(size: 10)).foregroundStyle(Color.textTertiary)
-                    Text("Attendance locked after trip is completed")
-                        .font(.system(size: 11)).foregroundStyle(Color.textTertiary)
+            if !passengerViewModel.isAttendanceOutsideWindow && !passengerViewModel.isAttendanceLocked {
+                HStack(spacing: 8) {
+                    attendanceButton(title: "Attending", icon: "checkmark.circle.fill",
+                                     isSelected: passengerViewModel.currentAttendance?.status == "attending",
+                                     color: Color.statusActive) {
+                        passengerViewModel.markAttendance(status: "attending")
+                    }
+                    attendanceButton(title: "Not Sure", icon: "questionmark.circle.fill",
+                                     isSelected: passengerViewModel.currentAttendance?.status == "not_sure",
+                                     color: Color.statusWarning) {
+                        passengerViewModel.markAttendance(status: "not_sure")
+                    }
+                    attendanceButton(title: "Absent", icon: "xmark.circle.fill",
+                                     isSelected: passengerViewModel.currentAttendance?.status == "absent",
+                                     color: Color.statusDanger) {
+                        passengerViewModel.markAttendance(status: "absent")
+                    }
                 }
+                .disabled(passengerViewModel.isMarkingAttendance)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .opacity(passengerViewModel.isTripCompleted ? 0.5 : 1)
-        .disabled(passengerViewModel.isTripCompleted || passengerViewModel.isMarkingAttendance)
+        .opacity(passengerViewModel.isAttendanceOutsideWindow ? 0.55 : 1)
     }
 
     private func attendanceButton(title: String, icon: String, isSelected: Bool, color: Color, action: @escaping () -> Void) -> some View {

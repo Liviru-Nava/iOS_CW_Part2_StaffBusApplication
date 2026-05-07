@@ -43,7 +43,8 @@ struct DriverDashboardView: View {
                 routeId: dashboardViewModel.currentRouteId,
                 driverId: FirebaseAuth.Auth.auth().currentUser?.uid ?? "",
                 sessionLabel: dashboardViewModel.selectedSessionType == .morning ? "Morning" : "Evening",
-                enrolledPassengers: []
+                enrolledPassengers: dashboardViewModel.selectedSessionType == .morning ? dashboardViewModel.morningEnrolledPassengers : dashboardViewModel.eveningEnrolledPassengers,
+                routeData: dashboardViewModel.fetchedRouteData
             )
         }
     }
@@ -232,6 +233,17 @@ struct DriverDashboardView: View {
                 .buttonStyle(.plain)
             }
 
+            if !dashboardViewModel.sessionWindowHint.isEmpty {
+                HStack(spacing: 5) {
+                    Image(systemName: "clock.badge.exclamationmark")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.statusWarning)
+                    Text(dashboardViewModel.sessionWindowHint)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.textTertiary)
+                }
+                .padding(.vertical, 4)
+            }
 
         }
         .padding(18)
@@ -477,7 +489,7 @@ struct DriverDashboardView: View {
                 Text(attendanceStop.stopName)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Color.textPrimary)
-                Text(attendanceStop.confirmedPassengerCount == 0 ? "No passengers confirmed" : "\(attendanceStop.confirmedPassengerCount) passenger\(attendanceStop.confirmedPassengerCount == 1 ? "" : "s") confirmed")
+                Text(attendanceStop.confirmedPassengerCount == 0 ? "No passengers confirmed" : "Expecting \(attendanceStop.confirmedPassengerCount) passenger\(attendanceStop.confirmedPassengerCount == 1 ? "" : "s")")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.textSecondary)
             }
@@ -539,7 +551,7 @@ struct DriverDashboardView: View {
                 Text(activeStop.stopName)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(isCurrentActiveStop ? Color.textPrimary : Color.textSecondary)
-                Text("\(activeStop.passengerCount) passenger\(activeStop.passengerCount == 1 ? "" : "s")")
+                Text("Expecting \(activeStop.passengerCount) passenger\(activeStop.passengerCount == 1 ? "" : "s")")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.textTertiary)
             }
@@ -784,22 +796,52 @@ struct RouteMapFullscreenView: View {
 
                     if let routePolyline = routePolyline {
                         MapPolyline(routePolyline)
-                            .stroke(Color.brandAccent, lineWidth: 5)
+                            .stroke(Color.brandAccent, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
                     }
 
                     if let route = routeData {
-                        Annotation(route.startLocation.locationName, coordinate: CLLocationCoordinate2D(latitude: route.startLocation.latitude, longitude: route.startLocation.longitude)) {
-                            Image(systemName: "flag.fill").foregroundColor(.green)
-                        }
+                        // Start point (Evening swaps start and end conceptually, but we can just label them clearly)
+                        let isMorning = sessionType == .morning
+                        let actualStart = isMorning ? route.startLocation : route.endLocation
+                        let actualEnd = isMorning ? route.endLocation : route.startLocation
+                        let orderedStops = isMorning ? route.routeStops : route.routeStops.reversed()
 
-                        ForEach(route.routeStops, id: \.stopName) { stop in
-                            Annotation(stop.stopName, coordinate: CLLocationCoordinate2D(latitude: stop.latitude, longitude: stop.longitude)) {
-                                Circle().fill(Color.brandAccent).frame(width: 10, height: 10)
+                        Annotation(actualStart.locationName, coordinate: CLLocationCoordinate2D(latitude: actualStart.latitude, longitude: actualStart.longitude)) {
+                            VStack(spacing: 0) {
+                                Image(systemName: "flag.circle.fill")
+                                    .font(.system(size: 28))
+                                    .foregroundColor(.green)
+                                    .background(Circle().fill(.white))
+                                Image(systemName: "triangle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.green)
+                                    .rotationEffect(.degrees(180))
+                                    .offset(y: -4)
                             }
                         }
 
-                        Annotation(route.endLocation.locationName, coordinate: CLLocationCoordinate2D(latitude: route.endLocation.latitude, longitude: route.endLocation.longitude)) {
-                            Image(systemName: "flag.checkered.circle.fill").foregroundColor(.red)
+                        ForEach(Array(orderedStops.enumerated()), id: \.element.stopName) { index, stop in
+                            Annotation(stop.stopName, coordinate: CLLocationCoordinate2D(latitude: stop.latitude, longitude: stop.longitude)) {
+                                ZStack {
+                                    Circle().fill(Color.brandAccent).frame(width: 24, height: 24)
+                                    Circle().stroke(Color.white, lineWidth: 2).frame(width: 24, height: 24)
+                                    Text("\(index + 1)").font(.system(size: 12, weight: .bold)).foregroundColor(.white)
+                                }
+                            }
+                        }
+
+                        Annotation(actualEnd.locationName, coordinate: CLLocationCoordinate2D(latitude: actualEnd.latitude, longitude: actualEnd.longitude)) {
+                            VStack(spacing: 0) {
+                                Image(systemName: "flag.checkered.circle.fill")
+                                    .font(.system(size: 28))
+                                    .foregroundColor(.red)
+                                    .background(Circle().fill(.white))
+                                Image(systemName: "triangle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.red)
+                                    .rotationEffect(.degrees(180))
+                                    .offset(y: -4)
+                            }
                         }
                     }
                 }
@@ -833,28 +875,47 @@ struct RouteMapFullscreenView: View {
     private func calculateDirections() async {
         guard let route = routeData else { return }
 
-        let startLocation = CLLocation(latitude: route.startLocation.latitude, longitude: route.startLocation.longitude)
-        let endLocation = CLLocation(latitude: route.endLocation.latitude, longitude: route.endLocation.longitude)
+        let isMorning = sessionType == .morning
+        let actualStart = isMorning ? route.startLocation : route.endLocation
+        let actualEnd = isMorning ? route.endLocation : route.startLocation
+        let orderedStops = isMorning ? route.routeStops : route.routeStops.reversed()
 
-        let request = MKDirections.Request()
-        
-        let startPlacemark = MKPlacemark(coordinate: startLocation.coordinate)
-        let endPlacemark = MKPlacemark(coordinate: endLocation.coordinate)
-        
-        
-        request.source = MKMapItem(placemark: startPlacemark)
-        request.destination = MKMapItem(placemark: endPlacemark)
-        request.transportType = .automobile
-
-        do {
-            let directions = MKDirections(request: request)
-            let response = try await directions.calculate()
-            if let firstRoute = response.routes.first {
-                self.routePolyline = firstRoute.polyline
-            }
-        } catch {
-            print("Failed to calculate polyline route: \(error.localizedDescription)")
+        var waypoints: [CLLocationCoordinate2D] = []
+        waypoints.append(CLLocationCoordinate2D(latitude: actualStart.latitude, longitude: actualStart.longitude))
+        for stop in orderedStops {
+            waypoints.append(CLLocationCoordinate2D(latitude: stop.latitude, longitude: stop.longitude))
         }
+        waypoints.append(CLLocationCoordinate2D(latitude: actualEnd.latitude, longitude: actualEnd.longitude))
+
+        var allCoordinates: [CLLocationCoordinate2D] = []
+
+        for i in 0..<(waypoints.count - 1) {
+            let request = MKDirections.Request()
+            request.source = MKMapItem(placemark: MKPlacemark(coordinate: waypoints[i]))
+            request.destination = MKMapItem(placemark: MKPlacemark(coordinate: waypoints[i + 1]))
+            request.transportType = .automobile
+
+            do {
+                let directions = MKDirections(request: request)
+                let response = try await directions.calculate()
+                if let firstRoute = response.routes.first {
+                    let pointCount = firstRoute.polyline.pointCount
+                    var coords = [CLLocationCoordinate2D](repeating: kCLLocationCoordinate2DInvalid, count: pointCount)
+                    firstRoute.polyline.getCoordinates(&coords, range: NSRange(location: 0, length: pointCount))
+                    
+                    if i > 0 && !coords.isEmpty {
+                        coords.removeFirst()
+                    }
+                    allCoordinates.append(contentsOf: coords)
+                }
+            } catch {
+                print("Failed to calculate polyline leg \(i): \(error.localizedDescription)")
+                allCoordinates.append(waypoints[i])
+                allCoordinates.append(waypoints[i + 1])
+            }
+        }
+
+        self.routePolyline = MKPolyline(coordinates: allCoordinates, count: allCoordinates.count)
     }
 }
 

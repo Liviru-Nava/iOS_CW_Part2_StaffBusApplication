@@ -94,6 +94,39 @@ final class AttendanceService {
             }
     }
 
+    // Listens to ALL attendance documents for a specific route, session, and date
+    func listenForRouteAttendance(
+        routeId: String,
+        session: String,
+        date: Date,
+        onChange: @escaping ([AttendanceModel]) -> Void
+    ) -> ListenerRegistration {
+        let dayStart = Calendar.current.startOfDay(for: date)
+        print("🔵 [AttendanceService] Listening for ALL attendance routeId: \(routeId), session: \(session), date: \(dayStart)")
+        
+        return db.collection(collection)
+            .whereField("routeId", isEqualTo: routeId)
+            .whereField("session", isEqualTo: session)
+            .whereField("tripDate", isEqualTo: Timestamp(date: dayStart))
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("🔴 [AttendanceService] Route listener error: \(error.localizedDescription)")
+                    onChange([])
+                    return
+                }
+                guard let snapshot else {
+                    onChange([])
+                    return
+                }
+                let models = snapshot.documents.compactMap { doc -> AttendanceModel? in
+                    var model = try? doc.data(as: AttendanceModel.self)
+                    model?.id = doc.documentID
+                    return model
+                }
+                onChange(models)
+            }
+    }
+
     // Helper: which date should attendance be marked for?
 
     // Returns tomorrow if the current time is after 6 PM (trip done for today), otherwise returns today.

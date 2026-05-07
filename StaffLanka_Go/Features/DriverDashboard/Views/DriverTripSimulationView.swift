@@ -12,6 +12,7 @@ struct DriverTripSimulationView: View {
     let driverId: String
     let sessionLabel: String
     let enrolledPassengers: [SimulationEnrolledPassenger]
+    let routeData: RouteModel?
 
     @StateObject private var simulationViewModel = DriverTripSimulationViewModel()
     @State private var mapCameraPosition: MapCameraPosition = .region(
@@ -41,7 +42,8 @@ struct DriverTripSimulationView: View {
                 routeId: routeId,
                 driverId: driverId,
                 session: sessionLabel,
-                passengers: enrolledPassengers
+                passengers: enrolledPassengers,
+                routeData: routeData
             )
         }
         .onChange(of: simulationViewModel.isSimulationComplete) { _, isComplete in
@@ -546,8 +548,9 @@ struct PaginatedPassengerSummaryView: View {
 
     private func attendanceBadge(status: String) -> some View {
         let isAttending = status == "attending"
-        let color: Color = isAttending ? Color.brandAccent : (status == "absent" ? Color.statusWarning : Color.textTertiary)
-        let label = isAttending ? "Attending" : (status == "absent" ? "Absent" : "Not Marked")
+        let isNotSure = status == "not_sure"
+        let color: Color = isAttending ? Color.brandAccent : (isNotSure ? Color.statusWarning : Color.statusDanger)
+        let label = isAttending ? "Attending" : (isNotSure ? "Not Sure" : (status == "absent" ? "Absent" : "Not Marked"))
         return Text(label)
             .font(.system(size: 9, weight: .medium))
             .foregroundStyle(color)

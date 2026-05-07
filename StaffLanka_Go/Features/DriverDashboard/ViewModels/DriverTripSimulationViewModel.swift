@@ -51,39 +51,7 @@ final class DriverTripSimulationViewModel: ObservableObject {
     // Full road path from MKDirections — exposed so the View can draw MapPolyline
     @Published var roadPolylineCoordinates: [CLLocationCoordinate2D] = []
 
-    // San Francisco stops — MKDirections will route along actual roads between these
-    let allSimulationStops: [SimulationRouteStop] = [
-        SimulationRouteStop(
-            stopDisplayName: "Union Square",
-            coordinate: CLLocationCoordinate2D(latitude: 37.7879, longitude: -122.4075),
-            textualInstructionToNextStop: "Head southwest on Geary St toward Powell St, then continue onto Market St"
-        ),
-        SimulationRouteStop(
-            stopDisplayName: "Civic Center",
-            coordinate: CLLocationCoordinate2D(latitude: 37.7796, longitude: -122.4179),
-            textualInstructionToNextStop: "Turn left onto Van Ness Ave, then right onto 16th St toward Guerrero St"
-        ),
-        SimulationRouteStop(
-            stopDisplayName: "Mission Dolores",
-            coordinate: CLLocationCoordinate2D(latitude: 37.7650, longitude: -122.4269),
-            textualInstructionToNextStop: "Continue south on Dolores St, turn right onto 18th St then left onto Castro St"
-        ),
-        SimulationRouteStop(
-            stopDisplayName: "Castro District",
-            coordinate: CLLocationCoordinate2D(latitude: 37.7609, longitude: -122.4350),
-            textualInstructionToNextStop: "Head south on Castro St, turn right onto 24th St, then left onto Church St"
-        ),
-        SimulationRouteStop(
-            stopDisplayName: "Noe Valley",
-            coordinate: CLLocationCoordinate2D(latitude: 37.7502, longitude: -122.4326),
-            textualInstructionToNextStop: "Continue south on Church St, then merge onto Diamond St toward Bosworth St"
-        ),
-        SimulationRouteStop(
-            stopDisplayName: "Glen Park",
-            coordinate: CLLocationCoordinate2D(latitude: 37.7330, longitude: -122.4337),
-            textualInstructionToNextStop: ""
-        )
-    ]
+    @Published var allSimulationStops: [SimulationRouteStop] = []
 
     // Dense road-following path built by MKDirections; the bus moves along this
     private var fullRoadPathCoordinates: [CLLocationCoordinate2D] = []
@@ -92,24 +60,70 @@ final class DriverTripSimulationViewModel: ObservableObject {
 
     private var simulationTimer: Timer?
     private var firestoreTripId: String?
+    private var driverId: String = ""
+    private var routeId: String = ""
     private var sessionLabel: String = "Morning"
     private var enrolledPassengers: [SimulationEnrolledPassenger] = []
     private var stopArrivalTimeLabels: [String] = []
 
     init() {
-        currentBusCoordinate = allSimulationStops.first?.coordinate
-            ?? CLLocationCoordinate2D(latitude: 37.7879, longitude: -122.4075)
+        currentBusCoordinate = CLLocationCoordinate2D(latitude: 6.9271, longitude: 79.8612) // Default Colombo coordinate
     }
 
     deinit { simulationTimer?.invalidate() }
 
-    func startSimulation(routeId: String, driverId: String, session: String, passengers: [SimulationEnrolledPassenger]) {
+    func startSimulation(routeId: String, driverId: String, session: String, passengers: [SimulationEnrolledPassenger], routeData: RouteModel?) {
+        self.routeId = routeId
+        self.driverId = driverId
         sessionLabel = session
         enrolledPassengers = passengers
         currentActiveStopIndex = 0
         elapsedSimulationSeconds = 0
         isSimulationComplete = false
         isCalculatingRoadRoute = true
+        
+        // Populate allSimulationStops from RouteModel
+        var stops: [SimulationRouteStop] = []
+        if let routeData = routeData {
+            stops.append(SimulationRouteStop(
+                stopDisplayName: routeData.startName ?? routeData.startLocation.locationName,
+                coordinate: CLLocationCoordinate2D(latitude: routeData.startLocation.latitude, longitude: routeData.startLocation.longitude),
+                textualInstructionToNextStop: "Head towards the first stop"
+            ))
+            
+            for stop in routeData.routeStops.sorted(by: { $0.stopOrder < $1.stopOrder }) {
+                stops.append(SimulationRouteStop(
+                    stopDisplayName: stop.stopName,
+                    coordinate: CLLocationCoordinate2D(latitude: stop.latitude, longitude: stop.longitude),
+                    textualInstructionToNextStop: "Continue to next stop"
+                ))
+            }
+            
+            stops.append(SimulationRouteStop(
+                stopDisplayName: routeData.endName ?? routeData.endLocation.locationName,
+                coordinate: CLLocationCoordinate2D(latitude: routeData.endLocation.latitude, longitude: routeData.endLocation.longitude),
+                textualInstructionToNextStop: ""
+            ))
+            
+            if session == "Evening" {
+                stops.reverse()
+                // Fix textual instructions after reverse
+                for i in 0..<stops.count {
+                    if i == stops.count - 1 {
+                        stops[i] = SimulationRouteStop(stopDisplayName: stops[i].stopDisplayName, coordinate: stops[i].coordinate, textualInstructionToNextStop: "")
+                    } else {
+                        stops[i] = SimulationRouteStop(stopDisplayName: stops[i].stopDisplayName, coordinate: stops[i].coordinate, textualInstructionToNextStop: "Head to next stop")
+                    }
+                }
+            }
+        } else {
+            // Fallback just in case
+            stops = [SimulationRouteStop(stopDisplayName: "Unknown Start", coordinate: CLLocationCoordinate2D(latitude: 6.9271, longitude: 79.8612), textualInstructionToNextStop: "")]
+        }
+        
+        allSimulationStops = stops
+        currentBusCoordinate = stops.first?.coordinate ?? CLLocationCoordinate2D(latitude: 6.9271, longitude: 79.8612)
+        
         stopArrivalTimeLabels = Array(repeating: "--:--", count: allSimulationStops.count)
         stopArrivalTimeLabels[0] = formattedCurrentTime()
 
@@ -214,7 +228,8 @@ final class DriverTripSimulationViewModel: ObservableObject {
         updateEstimatedArrivalTimesForFutureStops(overallProgress: overallProgress)
 
         if let tripId = firestoreTripId {
-            Task { try? await TripService.shared.updateDriverLocation(tripId: tripId, location: currentBusCoordinate) }
+            let currentIndex = currentActiveStopIndex
+            Task { try? await TripService.shared.updateDriverLocation(tripId: tripId, location: currentBusCoordinate, currentStopIndex: currentIndex) }
         }
 
         if overallProgress >= 1.0 { completeSimulation() }
@@ -289,8 +304,14 @@ final class DriverTripSimulationViewModel: ObservableObject {
 
         let builtTripRecord = buildCompletedTripHistoryRecord()
         completedTripRecord = builtTripRecord
-        TripHistoryStore.shared.appendCompletedTrip(builtTripRecord)
-
+        
+        Task {
+            do {
+                try await TripService.shared.saveTripHistoryRecord(builtTripRecord)
+            } catch {
+                print("🔴 [SimulationVM] Failed to save trip history: \(error.localizedDescription)")
+            }
+        }
         NotificationManager.shared.scheduleNotification(
             title: "Trip Completed",
             body: "Your \(sessionLabel.lowercased()) trip has ended. Great work!",
@@ -352,8 +373,10 @@ final class DriverTripSimulationViewModel: ObservableObject {
         }
 
         return DriverHistoryTripRecord(
+            driverId: driverId,
+            routeId: routeId,
             tripDate: Date(),
-            sessionType: sessionLabel == "Morning" ? .morning : .evening,
+            sessionType: sessionLabel == "Morning" ? "Morning" : "Evening",
             completionStatus: .autoCompleted,
             scheduledStartTime: stopArrivalTimeLabels.first ?? "--:--",
             actualEndTime: timeFormatter.string(from: Date()),
