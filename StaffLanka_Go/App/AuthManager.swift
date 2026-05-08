@@ -26,6 +26,12 @@ final class AuthManager: ObservableObject {
     @Published var authenticationState: AuthenticationState = .onboarding
     @Published var currentUserRole: String = "passenger"
 
+    @Published var isBiometricEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isBiometricEnabled, forKey: isBiometricEnabledStorageKey)
+        }
+    }
+
     private let hasSeenOnboardingStorageKey      = "hasSeenOnboarding"
     private let hasAcceptedTermsStorageKey        = "hasAcceptedTerms"
     private let isLoggedInStorageKey              = "isLoggedIn"
@@ -36,11 +42,6 @@ final class AuthManager: ObservableObject {
 
     var storedPhoneNumber: String {
         UserDefaults.standard.string(forKey: storedPhoneNumberKey) ?? ""
-    }
-
-    var isBiometricEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: isBiometricEnabledStorageKey) }
-        set { UserDefaults.standard.set(newValue, forKey: isBiometricEnabledStorageKey) }
     }
 
     var hasSeenOnboarding: Bool {
@@ -54,6 +55,7 @@ final class AuthManager: ObservableObject {
     }
 
     private init() {
+        self.isBiometricEnabled = UserDefaults.standard.bool(forKey: "isBiometricEnabled")
         checkSession()
     }
 
@@ -68,6 +70,10 @@ final class AuthManager: ObservableObject {
         }
         let isLoggedIn = UserDefaults.standard.bool(forKey: isLoggedInStorageKey)
         guard isLoggedIn else {
+            authenticationState = .unauthenticated
+            return
+        }
+        if isBiometricEnabled {
             authenticationState = .unauthenticated
             return
         }
@@ -89,9 +95,14 @@ final class AuthManager: ObservableObject {
     func signIn(phoneNumber: String) {
         UserDefaults.standard.set(true,        forKey: isLoggedInStorageKey)
         UserDefaults.standard.set(phoneNumber, forKey: storedPhoneNumberKey)
-        authenticationState = .authenticated
+    }
+
+    func completeSignIn() {
         Task {
-            guard let currentFirebaseUser = Auth.auth().currentUser else { return }
+            guard let currentFirebaseUser = Auth.auth().currentUser else {
+                authenticationState = .authenticated
+                return
+            }
             await refreshUserRoleFromFirestore(userId: currentFirebaseUser.uid)
         }
     }

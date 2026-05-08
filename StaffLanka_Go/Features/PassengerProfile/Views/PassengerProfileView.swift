@@ -9,6 +9,7 @@ import SwiftUI
  
 struct PassengerProfileView: View {
     @ObservedObject var profileViewModel: PassengerProfileViewModel
+    @ObservedObject private var authManager = AuthManager.shared
     @State private var showSignOutConfirm: Bool = false
  
     var body: some View {
@@ -52,13 +53,13 @@ struct PassengerProfileView: View {
         } message: {
             Text("This will remove all locally cached profile information, trip history, and notifications stored on this device. Your account and data on the server will not be affected.")
         }
-        // Confirmation toast after removal
+        // Remove Local Data — success
         .alert("Local Data Removed", isPresented: $profileViewModel.localDataRemoved) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("All locally stored data has been cleared from this device.")
         }
-        // Delete Account — first confirmation
+        // Delete Account — confirmation
         .alert("Delete Account", isPresented: $profileViewModel.showDeleteAccountConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Delete My Account", role: .destructive) {
@@ -94,7 +95,6 @@ struct PassengerProfileView: View {
             }
         }
     }
- 
  
     //Profile Header
  
@@ -171,6 +171,13 @@ struct PassengerProfileView: View {
             rowDivider
             profileRow(icon: "doc.text.fill", iconColor: Color.brandSecondary, title: "Terms & Privacy") {}
             rowDivider
+ 
+            // Face ID / Touch ID toggle — only shown when the device supports biometrics
+            if BiometricService.shared.deviceSupportsBiometricAuthentication {
+                biometricToggleRow
+                rowDivider
+            }
+ 
             // Remove Local Data
             profileRow(
                 icon: "internaldrive",
@@ -181,6 +188,7 @@ struct PassengerProfileView: View {
                 profileViewModel.showRemoveLocalDataConfirm = true
             }
             rowDivider
+ 
             // Sign Out
             profileRow(
                 icon: "arrow.right.square.fill",
@@ -192,6 +200,7 @@ struct PassengerProfileView: View {
                 showSignOutConfirm = true
             }
             rowDivider
+ 
             // Delete Account
             profileRow(
                 icon: "trash.fill",
@@ -203,6 +212,42 @@ struct PassengerProfileView: View {
                 profileViewModel.showDeleteAccountConfirm = true
             }
         }
+    }
+ 
+    //A toggle row that enables or disables biometric sign-in.
+    //Turning it ON triggers a live Face ID challenge to confirm hardware consent
+    //before the preference is persisted. Turning it OFF simply clears the flag.
+    private var biometricToggleRow: some View {
+        HStack(spacing: 12) {
+            settingsIcon(systemName: "faceid", color: Color.brandAccent)
+            Text("\(BiometricService.shared.biometricTypeDisplayName) Sign-In")
+                .font(.system(size: 15))
+                .foregroundColor(.textPrimary)
+            Spacer()
+            Toggle("", isOn: Binding(
+                get: { authManager.isBiometricEnabled },
+                set: { newValue in
+                    if newValue {
+                        // Require a successful biometric challenge before enabling
+                        Task {
+                            let succeeded = await BiometricService.shared.authenticateWithBiometrics(
+                                reasonMessage: "Verify your identity to enable \(BiometricService.shared.biometricTypeDisplayName) sign-in"
+                            )
+                            if succeeded {
+                                authManager.enableBiometric()
+                            }
+                        }
+                    } else {
+                        authManager.disableBiometric()
+                    }
+                }
+            ))
+            .labelsHidden()
+            .tint(Color.brandAccent)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+        .contentShape(Rectangle())
     }
  
     private var versionFooter: some View {
@@ -295,7 +340,7 @@ struct PassengerProfileView: View {
     }
 }
  
-//Edit Profile Sheet
+//Edit Profile Sheet (unchanged)
  
 struct PassengerEditProfileSheet: View {
     @ObservedObject var profileViewModel: PassengerProfileViewModel
@@ -400,6 +445,7 @@ struct PassengerEditProfileSheet: View {
     }
 }
  
+//Previews
  
 #Preview("Dark Mode") {
     NavigationStack {

@@ -12,6 +12,7 @@ import PhotosUI
 struct DriverProfileView: View {
  
     @StateObject private var driverProfileViewModel = DriverProfileViewModel()
+    @ObservedObject private var authManager = AuthManager.shared
     @State private var showSignOutConfirmationAlert: Bool = false
  
     var body: some View {
@@ -29,8 +30,8 @@ struct DriverProfileView: View {
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.large)
         .onAppear {
-            driverProfileViewModel.loadFromCoreData()   // show cached data instantly
-            driverProfileViewModel.fetchDriverProfile() // then refresh from Firestore
+            driverProfileViewModel.loadFromCoreData()
+            driverProfileViewModel.fetchDriverProfile()
         }
         .sheet(isPresented: $driverProfileViewModel.isEditingDriverProfile) {
             DriverEditProfileSheet(driverProfileViewModel: driverProfileViewModel)
@@ -51,50 +52,15 @@ struct DriverProfileView: View {
         } message: {
             Text("This will remove all locally cached profile information, trip history, and notifications stored on this device. Your account and data on the server will not be affected.")
         }
-        // Remove Local Data — success confirmation
+        // Remove Local Data — success
         .alert("Local Data Removed", isPresented: $driverProfileViewModel.localDataRemoved) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("All locally stored data has been cleared from this device.")
         }
-        // Delete Account — first confirmation
-        .alert("Delete Account", isPresented: $driverProfileViewModel.showDeleteAccountConfirm) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete My Account", role: .destructive) {
-                driverProfileViewModel.deleteAccount()
-            }
-        } message: {
-            Text("This will permanently delete your account, your route, all trip history, passenger records, and earnings data. This action cannot be undone.")
-        }
-        // Delete Account — error
-        .alert("Deletion Failed", isPresented: $driverProfileViewModel.showDeleteAccountError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(driverProfileViewModel.deleteAccountError ?? "An unexpected error occurred. Please try again.")
-        }
-        // Deletion in-progress overlay
-        .overlay {
-            if driverProfileViewModel.isDeletingAccount {
-                ZStack {
-                    Color.black.opacity(0.45)
-                        .ignoresSafeArea()
-                    VStack(spacing: 16) {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .tint(.white)
-                            .scaleEffect(1.4)
-                        Text("Deleting account…")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(.white)
-                    }
-                    .padding(32)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
-                }
-            }
-        }
     }
  
-    //  Profile Header
+    //Profile Header
  
     private var profileHeaderSection: some View {
         Section {
@@ -148,7 +114,6 @@ struct DriverProfileView: View {
         }
     }
  
-    // Reusable avatar view used in both the header and the edit sheet
     @ViewBuilder
     func driverProfileAvatarDisplayView(diameter: CGFloat, initialsFont: Font) -> some View {
         if let profilePhotoData = driverProfileViewModel.driverProfilePhotoImageData,
@@ -170,7 +135,8 @@ struct DriverProfileView: View {
         }
     }
  
-    //  Sections
+    //Sections
+ 
     private var serviceSection: some View {
         Section("Service") {
             NavigationLink {
@@ -277,6 +243,12 @@ struct DriverProfileView: View {
             .buttonStyle(.plain)
             .listRowBackground(Color.cardBackground)
  
+            // Face ID / Touch ID toggle — only shown when the device supports biometrics
+            if BiometricService.shared.deviceSupportsBiometricAuthentication {
+                biometricToggleRow
+                    .listRowBackground(Color.cardBackground)
+            }
+ 
             // Remove Local Data
             Button {
                 driverProfileViewModel.showRemoveLocalDataConfirm = true
@@ -298,24 +270,45 @@ struct DriverProfileView: View {
                 .padding(.vertical, 2)
             }
             .listRowBackground(Color.cardBackground)
-            
-            //Delete Account button
-            Button(role: .destructive) {
-                driverProfileViewModel.showDeleteAccountConfirm = true
-            } label: {
-                HStack(spacing: 12) {
-                    profileIconBadge(systemIconName: "trash.fill", badgeColor: .statusDanger)
-                    Text("Delete Account")
-                        .font(.system(size: 15))
-                        .foregroundColor(.statusDanger)
-                }
-                .padding(.vertical, 2)
-            }
-            .listRowBackground(Color.cardBackground)
         }
     }
  
-    //  Reusable Row Helper
+    //A toggle row that enables or disables biometric sign-in.
+    //Turning it ON triggers a live Face ID challenge to confirm hardware consent
+    //before the preference is persisted. Turning it OFF simply clears the flag.
+    private var biometricToggleRow: some View {
+        HStack(spacing: 12) {
+            profileIconBadge(systemIconName: "faceid", badgeColor: Color.brandAccent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(BiometricService.shared.biometricTypeDisplayName) Sign-In")
+                    .font(.system(size: 15))
+                    .foregroundColor(.textPrimary)
+            }
+            Spacer()
+            Toggle("", isOn: Binding(
+                get: { authManager.isBiometricEnabled },
+                set: { newValue in
+                    if newValue {
+                        Task {
+                            let succeeded = await BiometricService.shared.authenticateWithBiometrics(
+                                reasonMessage: "Verify your identity to enable \(BiometricService.shared.biometricTypeDisplayName) sign-in"
+                            )
+                            if succeeded {
+                                authManager.enableBiometric()
+                            }
+                        }
+                    } else {
+                        authManager.disableBiometric()
+                    }
+                }
+            ))
+            .labelsHidden()
+            .tint(Color.brandAccent)
+        }
+        .padding(.vertical, 2)
+    }
+ 
+    //Reusable Row Helper
  
     private func profileListRow(iconName: String, iconBadgeColor: Color, rowTitle: String, rowSubtitle: String?) -> some View {
         HStack(spacing: 12) {
@@ -335,7 +328,7 @@ struct DriverProfileView: View {
     }
 }
  
-//  Icon Badge (file-scope helper, unchanged)
+//Icon Badge (file-scope helper, unchanged)
  
 func profileIconBadge(systemIconName: String, badgeColor: Color) -> some View {
     Image(systemName: systemIconName)
@@ -346,7 +339,7 @@ func profileIconBadge(systemIconName: String, badgeColor: Color) -> some View {
         .clipShape(RoundedRectangle(cornerRadius: 7))
 }
  
-//  Edit Profile Sheet (unchanged)
+//Edit Profile Sheet (unchanged)
  
 struct DriverEditProfileSheet: View {
     @ObservedObject var driverProfileViewModel: DriverProfileViewModel
@@ -465,7 +458,7 @@ struct DriverEditProfileSheet: View {
     }
 }
  
-//  Edit Bus Details Sheet (unchanged)
+//Edit Bus Details Sheet (unchanged)
  
 struct DriverEditBusDetailsSheet: View {
     @ObservedObject var driverProfileViewModel: DriverProfileViewModel
@@ -530,7 +523,7 @@ struct DriverEditBusDetailsSheet: View {
     }
 }
  
-//  Edit Pricing Sheet (unchanged)
+//Edit Pricing Sheet (unchanged)
  
 struct DriverEditPricingSheet: View {
     @ObservedObject var driverProfileViewModel: DriverProfileViewModel
@@ -595,7 +588,7 @@ struct DriverEditPricingSheet: View {
     }
 }
  
-//  Previews
+//Previews
  
 #Preview("Dark Mode") {
     NavigationStack {

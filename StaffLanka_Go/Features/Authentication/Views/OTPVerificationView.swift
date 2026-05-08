@@ -5,7 +5,6 @@
 //  Created by Liviru Navaratna on 2026-04-01.
 //
 
-
 import SwiftUI
 import Combine
 
@@ -46,6 +45,24 @@ struct OTPVerificationView: View {
             Button("Not Now", role: .cancel) { otpViewModel.dismissBiometricEnrollmentPrompt() }
         } message: {
             Text("Sign in faster next time using \(BiometricService.shared.biometricTypeDisplayName) instead of your phone number.")
+        }
+        .overlay {
+            if otpViewModel.isBiometricEnrolling {
+                ZStack {
+                    Color.black.opacity(0.4).ignoresSafeArea()
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(.white)
+                            .scaleEffect(1.4)
+                        Text("Verifying \(BiometricService.shared.biometricTypeDisplayName)…")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                    .padding(32)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+                }
+            }
         }
         .onAppear {
             hiddenFieldFocused = true

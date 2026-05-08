@@ -5,7 +5,6 @@
 //  Created by Liviru Navaratna on 2026-04-01.
 //
 
-
 import Foundation
 import Combine
 import SwiftUI
@@ -29,6 +28,7 @@ final class OTPVerificationViewModel: ObservableObject {
     @Published var secondsRemainingForResend: Int = 30
     @Published var shakeAnimationOffset: CGFloat = 0
     @Published var shouldPromptBiometricEnrollment: Bool = false
+    @Published var isBiometricEnrolling: Bool = false
 
     private var countdownTask: Task<Void, Never>?
 
@@ -100,15 +100,46 @@ final class OTPVerificationViewModel: ObservableObject {
             )
 
             AuthManager.shared.signIn(phoneNumber: authenticatedPhoneNumber)
-            if !AuthManager.shared.isBiometricEnabled && BiometricService.shared.deviceSupportsBiometricAuthentication {
+
+            if !AuthManager.shared.isBiometricEnabled
+                && BiometricService.shared.deviceSupportsBiometricAuthentication {
                 shouldPromptBiometricEnrollment = true
+            } else {
+                AuthManager.shared.completeSignIn()
+                verificationState = .success
             }
-            verificationState = .success
         } catch let firebaseError as NSError {
             let userFacingErrorMessage = mapFirebaseOTPErrorToUserMessage(firebaseError)
             verificationState = .error(userFacingErrorMessage)
             await triggerShakeAnimation()
         }
+    }
+
+    func enrollBiometric() {
+        isBiometricEnrolling = true
+        Task {
+            let challengeSucceeded = await BiometricService.shared.authenticateWithBiometrics(
+                reasonMessage: "Verify your identity to enable \(BiometricService.shared.biometricTypeDisplayName)"
+            )
+            isBiometricEnrolling = false
+            if challengeSucceeded {
+                AuthManager.shared.enableBiometric()
+            }
+            shouldPromptBiometricEnrollment = false
+            AuthManager.shared.completeSignIn()
+            verificationState = .success
+        }
+    }
+
+    func dismissBiometricEnrollmentPrompt() {
+        shouldPromptBiometricEnrollment = false
+        AuthManager.shared.completeSignIn()
+        verificationState = .success
+    }
+
+    func handleAutoSubmitIfComplete() async {
+        guard isOTPComplete && verificationState == .idle else { return }
+        await verifyOTP()
     }
 
     private func mapFirebaseOTPErrorToUserMessage(_ error: NSError) -> String {
@@ -122,20 +153,6 @@ final class OTPVerificationViewModel: ObservableObject {
         default:
             return error.localizedDescription
         }
-    }
-
-    func handleAutoSubmitIfComplete() async {
-        guard isOTPComplete && verificationState == .idle else { return }
-        await verifyOTP()
-    }
-
-    func enrollBiometric() {
-        AuthManager.shared.enableBiometric()
-        shouldPromptBiometricEnrollment = false
-    }
-
-    func dismissBiometricEnrollmentPrompt() {
-        shouldPromptBiometricEnrollment = false
     }
 
     private func triggerShakeAnimation() async {
