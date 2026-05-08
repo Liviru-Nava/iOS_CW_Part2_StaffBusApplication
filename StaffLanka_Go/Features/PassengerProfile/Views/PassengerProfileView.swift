@@ -167,6 +167,10 @@ struct PassengerProfileView: View {
  
     private var accountSection: some View {
         profileSection(title: "Account") {
+            NavigationLink(destination: PassengerNotificationSettingsView()) {
+                profileRowContent(icon: "bell.badge.fill", iconColor: Color.statusWarning, title: "Notification Settings")
+            }
+            rowDivider
             profileRow(icon: "questionmark.circle.fill", iconColor: Color.statusWarning, title: "Help & Support") {}
             rowDivider
             profileRow(icon: "doc.text.fill", iconColor: Color.brandSecondary, title: "Terms & Privacy") {}

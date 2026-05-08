@@ -3,6 +3,11 @@
 //  StaffLanka_Go
 //
 
+//
+//  DriverTripSimulationViewModel.swift
+//  StaffLanka_Go
+//
+
 import Foundation
 import MapKit
 import Combine
@@ -141,6 +146,13 @@ final class DriverTripSimulationViewModel: ObservableObject {
             } catch {
                 print("🔴 [SimulationVM] Firestore startTrip error: \(error.localizedDescription)")
             }
+
+            NotificationManager.shared.scheduleNotification(
+                title: "Trip Started",
+                body: "Your \(sessionLabel.lowercased()) trip is now underway. Safe driving!",
+                actionType: "TRIP_START",
+                isTripAlert: true
+            )
 
             startSimulationTimer()
         }

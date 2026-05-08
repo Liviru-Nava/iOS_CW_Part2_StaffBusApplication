@@ -6,12 +6,26 @@
 //
 
 import SwiftUI
+import CoreData
+import FirebaseAuth
 
 struct PassengerDashboard: View {
 
     @StateObject private var passengerViewModel = PassengerDashboardViewModel()
     @State private var showRouteSearch = false
     @State private var showTripTracking = false
+    @State private var showPassengerNotifications = false
+
+    @FetchRequest(
+        sortDescriptors: [NSSortDescriptor(keyPath: \NotificationEntity.timestamp, ascending: false)],
+        animation: .default
+    )
+    private var allStoredNotifications: FetchedResults<NotificationEntity>
+
+    private var unreadNotificationCountForCurrentUser: Int {
+        let currentFirebaseUserId = Auth.auth().currentUser?.uid ?? ""
+        return allStoredNotifications.filter { $0.userId == currentFirebaseUserId && !$0.isRead }.count
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -28,6 +42,9 @@ struct PassengerDashboard: View {
         .navigationDestination(isPresented: $showRouteSearch) {
             RouteSearchView()
         }
+        .navigationDestination(isPresented: $showPassengerNotifications) {
+            PassengerNotificationsView()
+        }
         .onAppear {
             passengerViewModel.startListening()
         }
@@ -35,18 +52,24 @@ struct PassengerDashboard: View {
             if let trip = passengerViewModel.currentTrip,
                let tripId = trip.id,
                let service = passengerViewModel.currentService {
+
+                let selectedSessionInfo = passengerViewModel.selectedTrip == .morning
+                    ? service.morning
+                    : service.evening
+
                 PassengerTripTrackingView(
                     tripId: tripId,
-                    routeData: nil,        // route fetched inside view via TripService
-                    driverName: service.morning?.driverName ?? service.evening?.driverName ?? "Driver",
-                    plateNumber: service.morning?.licensePlate ?? service.evening?.licensePlate ?? "—",
-                    session: passengerViewModel.selectedTrip == .morning ? "Morning" : "Evening"
+                    routeData: nil,
+                    driverName: selectedSessionInfo?.driverName ?? "Driver",
+                    plateNumber: selectedSessionInfo?.licensePlate ?? "—",
+                    session: passengerViewModel.selectedTrip == .morning ? "Morning" : "Evening",
+                    passengerPickupStopName: service.routeStart,
+                    passengerDropOffStopName: service.routeEnd,
+                    passengerFullName: passengerViewModel.userName
                 )
             }
         }
     }
-
-    // Header
 
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -61,7 +84,9 @@ struct PassengerDashboard: View {
                 }
                 Spacer()
                 ZStack(alignment: .topTrailing) {
-                    Button {} label: {
+                    Button {
+                        showPassengerNotifications = true
+                    } label: {
                         Image(systemName: "bell.fill")
                             .font(.system(size: 17, weight: .medium))
                             .foregroundStyle(Color.brandAccent)
@@ -70,7 +95,20 @@ struct PassengerDashboard: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    Circle().fill(Color.statusWarning).frame(width: 9, height: 9).offset(x: 1, y: -1)
+
+                    if unreadNotificationCountForCurrentUser > 0 {
+                        ZStack {
+                            Circle()
+                                .fill(Color.statusWarning)
+                                .frame(width: unreadNotificationCountForCurrentUser > 9 ? 18 : 14, height: 14)
+                            if unreadNotificationCountForCurrentUser > 1 {
+                                Text(unreadNotificationCountForCurrentUser > 99 ? "99+" : "\(unreadNotificationCountForCurrentUser)")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                        .offset(x: 2, y: -2)
+                    }
                 }
             }
 
@@ -94,8 +132,6 @@ struct PassengerDashboard: View {
         .background(Color.appBackground.ignoresSafeArea(edges: .top))
     }
 
-    // Content
-
     private var contentSection: some View {
         VStack(alignment: .leading, spacing: 22) {
             if passengerViewModel.isLoading {
@@ -105,11 +141,9 @@ struct PassengerDashboard: View {
             } else {
                 noServiceCard
             }
-            registerRouteCard   // always visible
+            registerRouteCard
         }
     }
-
-    // Loading skeleton
 
     private var loadingCard: some View {
         HStack(spacing: 14) {
@@ -125,12 +159,9 @@ struct PassengerDashboard: View {
         .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 
-    // Active service card
-
     private func activeServiceCard(_ service: EnrolledService) -> some View {
         VStack(spacing: 0) {
 
-            // ── Route header ──
             HStack(spacing: 12) {
                 ZStack {
                     Circle().fill(Color.brandAccent.opacity(0.12)).frame(width: 44, height: 44)
@@ -153,7 +184,6 @@ struct PassengerDashboard: View {
 
             Divider().background(Color.divider)
 
-            // ── Session info ──
             let sessionInfo = passengerViewModel.selectedTrip == .morning ? service.morning : service.evening
             if let info = sessionInfo {
                 let isEvening = passengerViewModel.selectedTrip == .evening
@@ -174,12 +204,10 @@ struct PassengerDashboard: View {
 
             Divider().background(Color.divider)
 
-            // ── Trip status + Track button ──
             tripStatusRow
 
             Divider().background(Color.divider)
 
-            // ── Attendance section ──
             attendanceSection
         }
         .background(Color.cardBackground)
@@ -187,11 +215,8 @@ struct PassengerDashboard: View {
         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.statusActive.opacity(0.25), lineWidth: 1))
     }
 
-    // ── Trip status + Track Driver button
-
     private var tripStatusRow: some View {
         HStack(spacing: 12) {
-            // Status chip
             HStack(spacing: 5) {
                 Circle()
                     .fill(passengerViewModel.isTripActive ? Color.statusActive : (passengerViewModel.isTripCompleted ? Color.textTertiary : Color.statusWarning))
@@ -209,7 +234,6 @@ struct PassengerDashboard: View {
 
             Spacer()
 
-            // Track Driver button — only enabled when trip is active
             Button {
                 if passengerViewModel.isTripActive { showTripTracking = true }
             } label: {
@@ -232,8 +256,6 @@ struct PassengerDashboard: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
-
-    // ── Attendance section
 
     private var attendanceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -318,8 +340,6 @@ struct PassengerDashboard: View {
         .buttonStyle(.plain)
     }
 
-    // Helpers
-
     private func serviceInfoRow(icon: String, label: String, value: String) -> some View {
         HStack(spacing: 10) {
             Image(systemName: icon).font(.system(size: 12)).foregroundStyle(Color.brandAccent).frame(width: 18)
@@ -336,8 +356,6 @@ struct PassengerDashboard: View {
         case .evening: return "Evening Only"
         }
     }
-
-    // No-service placeholder
 
     private var noServiceCard: some View {
         VStack(spacing: 14) {
@@ -356,8 +374,6 @@ struct PassengerDashboard: View {
         .background(Color.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20))
     }
-
-    // Browse routes card (always visible)
 
     private var registerRouteCard: some View {
         VStack(alignment: .leading, spacing: 20) {

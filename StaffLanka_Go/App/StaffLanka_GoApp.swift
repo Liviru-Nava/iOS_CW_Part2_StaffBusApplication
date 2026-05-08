@@ -9,9 +9,10 @@ import SwiftUI
 import Firebase
 import FirebaseAuth
 import CoreData
+import UserNotifications
 
-class AppDelegate: NSObject, UIApplicationDelegate {
-    
+class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+
     var window: UIWindow?
 
     func application(
@@ -20,7 +21,25 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         FirebaseApp.configure()
         Auth.auth().settings?.isAppVerificationDisabledForTesting = true
+        UNUserNotificationCenter.current().delegate = self
+        NotificationManager.shared.requestPermissions()
         return true
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .badge])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        completionHandler()
     }
 
     func application(
@@ -35,7 +54,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         Auth.auth().setAPNSToken(deviceToken, type: .sandbox)
     }
 
-    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         if Auth.auth().canHandleNotification(userInfo) {
             completionHandler(.noData)
             return
@@ -48,8 +67,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct StaffLanka_GoApp: App {
     @StateObject private var authManager = AuthManager.shared
     let persistenceController = PersistenceController.shared
-    
-    // register app delegate for Firebase setup
+
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
 
     var body: some Scene {

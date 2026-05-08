@@ -15,7 +15,6 @@ import UserNotifications
 @MainActor
 final class PassengerDashboardViewModel: ObservableObject {
 
-    // Published state
     @Published var userName: String = ""
     @Published var selectedTrip: TripTab
 
@@ -23,26 +22,19 @@ final class PassengerDashboardViewModel: ObservableObject {
         self.selectedTrip = Calendar.current.component(.hour, from: Date()) < 12 ? .morning : .evening
     }
 
-    // Accepted enrollment per session
     @Published var morningService: EnrolledService? = nil
     @Published var eveningService: EnrolledService? = nil
 
-    // Active trip state per session
     @Published var morningTrip: TripModel? = nil
     @Published var eveningTrip: TripModel? = nil
 
-    // Attendance records per session (for the relevant date)
     @Published var morningAttendance: AttendanceModel? = nil
     @Published var eveningAttendance: AttendanceModel? = nil
 
     @Published var isLoading: Bool = false
     @Published var isMarkingAttendance: Bool = false
 
-    // Enums
-
     enum TripTab { case morning, evening }
-
-    // Computed properties
 
     var greetingText: String {
         let hour = Calendar.current.component(.hour, from: Date())
@@ -65,17 +57,16 @@ final class PassengerDashboardViewModel: ObservableObject {
         selectedTrip == .morning ? morningTrip : eveningTrip
     }
 
-    // Only treat a trip as active/completed when it belongs to TODAY
     var isTripActive: Bool {
         guard let trip = currentTrip, trip.status == "active" else { return false }
         return Calendar.current.isDateInToday(trip.tripDate)
     }
+
     var isTripCompleted: Bool {
         guard let trip = currentTrip, trip.status == "completed" else { return false }
         return Calendar.current.isDateInToday(trip.tripDate)
     }
 
-    // Attendance window
     private enum AttendanceWindowState {
         case morningWindowAvailable
         case morningWindowLocked
@@ -94,7 +85,6 @@ final class PassengerDashboardViewModel: ObservableObject {
                 if isPassed || isTripCompleted { return .morningWindowLocked }
                 return .morningWindowAvailable
             }
-            // Evening time on morning tab — unlock tomorrow only if today's evening trip completed
             let eveningDone = eveningTrip != nil
                 && eveningTrip!.status == "completed"
                 && Calendar.current.isDateInToday(eveningTrip!.tripDate)
@@ -109,7 +99,6 @@ final class PassengerDashboardViewModel: ObservableObject {
         }
     }
 
-    // Flat properties used by the View — no nested enum exposed
     var isAttendanceOutsideWindow: Bool { attendanceWindowState == .outsideWindow }
     var isAttendanceLocked: Bool {
         attendanceWindowState == .morningWindowLocked || attendanceWindowState == .eveningWindowLocked
@@ -169,13 +158,20 @@ final class PassengerDashboardViewModel: ObservableObject {
             : "You haven't registered for an evening route yet."
     }
 
-    // Private state
-
     private var passengerId: String = ""
     private var morningRequestId: String = ""
     private var eveningRequestId: String = ""
     private var morningDriverId: String = ""
     private var eveningDriverId: String = ""
+
+    private var cachedMorningRouteStops: [String] = []
+    private var cachedEveningRouteStops: [String] = []
+    private var hasAlreadyFiredMorningPickupProximityAlert: Bool = false
+    private var hasAlreadyFiredMorningDropoffProximityAlert: Bool = false
+    private var hasAlreadyFiredEveningPickupProximityAlert: Bool = false
+    private var hasAlreadyFiredEveningDropoffProximityAlert: Bool = false
+    private let proximityAlertThresholdInMinutes: Int = 5
+    private let simulationTotalDurationSeconds: Double = 90.0
 
     nonisolated(unsafe) private var _enrollmentListener: ListenerRegistration?
     nonisolated(unsafe) private var _morningTripListener: ListenerRegistration?
@@ -191,13 +187,10 @@ final class PassengerDashboardViewModel: ObservableObject {
         _eveningAttendanceListener?.remove()
     }
 
-    // Start all listeners
-
     func startListening() {
         guard let user = Auth.auth().currentUser else { return }
         passengerId = user.uid
 
-        // Load user name
         Task {
             if let userModel = try? await UserService.shared.fetchUser(userId: user.uid) {
                 self.userName = userModel.fullName.isEmpty ? "Passenger" : userModel.fullName
@@ -214,93 +207,140 @@ final class PassengerDashboardViewModel: ObservableObject {
         }
     }
 
-    // Process enrollment changes
-
     private func processEnrollments(_ requests: [JoinRequestModel]) async {
-        let accepted = requests.filter { $0.status == "accepted" }
-        print("🔵 [PassengerDashboardVM] processEnrollments — \(accepted.count) accepted requests")
+        let acceptedRequests = requests.filter { $0.status == "accepted" }
+        print("[PassengerDashboardVM] processEnrollments — \(acceptedRequests.count) accepted requests")
 
-        var morning: EnrolledService? = nil
-        var evening: EnrolledService? = nil
-        var morningReqId = ""
-        var eveningReqId = ""
-        var morningDrvId = ""
-        var eveningDrvId = ""
+        var morningBuiltService: EnrolledService? = nil
+        var eveningBuiltService: EnrolledService? = nil
+        var resolvedMorningRequestId = ""
+        var resolvedEveningRequestId = ""
+        var resolvedMorningDriverId = ""
+        var resolvedEveningDriverId = ""
 
-        for req in accepted {
-            guard let docId = req.id else { continue }
-            print("🔵 [PassengerDashboardVM] Building service for req: \(docId) driverId: \(req.driverId) session: \(req.session)")
-            let service = await buildEnrolledService(from: req, docId: docId)
-            guard let service else { continue }
+        for singleRequest in acceptedRequests {
+            guard let documentId = singleRequest.id else { continue }
+            let builtService = await buildEnrolledService(from: singleRequest, docId: documentId)
+            guard let builtService else { continue }
 
-            switch service.session {
+            switch builtService.session {
             case .morning:
-                morning = service; morningReqId = docId; morningDrvId = req.driverId
+                morningBuiltService = builtService
+                resolvedMorningRequestId = documentId
+                resolvedMorningDriverId = singleRequest.driverId
             case .evening:
-                evening = service; eveningReqId = docId; eveningDrvId = req.driverId
+                eveningBuiltService = builtService
+                resolvedEveningRequestId = documentId
+                resolvedEveningDriverId = singleRequest.driverId
             case .both:
-                morning = service; morningReqId = docId; morningDrvId = req.driverId
-                evening = service; eveningReqId = docId; eveningDrvId = req.driverId
+                morningBuiltService = builtService
+                resolvedMorningRequestId = documentId
+                resolvedMorningDriverId = singleRequest.driverId
+                eveningBuiltService = builtService
+                resolvedEveningRequestId = documentId
+                resolvedEveningDriverId = singleRequest.driverId
             }
         }
 
-        self.morningService   = morning
-        self.eveningService   = evening
-        self.morningRequestId = morningReqId
-        self.eveningRequestId = eveningReqId
-        self.morningDriverId  = morningDrvId
-        self.eveningDriverId  = eveningDrvId
+        self.morningService = morningBuiltService
+        self.eveningService = eveningBuiltService
+        self.morningRequestId = resolvedMorningRequestId
+        self.eveningRequestId = resolvedEveningRequestId
+        self.morningDriverId = resolvedMorningDriverId
+        self.eveningDriverId = resolvedEveningDriverId
         self.isLoading = false
 
-        print("🟢 [PassengerDashboardVM] morning=\(morning != nil) morningDriverId=\(morningDrvId)")
-        print("🟢 [PassengerDashboardVM] evening=\(evening != nil) eveningDriverId=\(eveningDrvId)")
-
-        // Wire trip listeners using the driverId from the joinRequest
-        if !morningDrvId.isEmpty {
-            attachTripListener(driverId: morningDrvId, session: "Morning", requestId: morningReqId)
+        if !resolvedMorningDriverId.isEmpty {
+            await prefetchAndCacheRouteStops(requestId: resolvedMorningRequestId, session: "Morning")
+            attachTripListener(driverId: resolvedMorningDriverId, session: "Morning", requestId: resolvedMorningRequestId)
         }
-        if !eveningDrvId.isEmpty && eveningDrvId != morningDrvId {
-            attachTripListener(driverId: eveningDrvId, session: "Evening", requestId: eveningReqId)
-        } else if !eveningDrvId.isEmpty && eveningDrvId == morningDrvId {
-            attachTripListener(driverId: eveningDrvId, session: "Evening", requestId: eveningReqId)
+        if !resolvedEveningDriverId.isEmpty && resolvedEveningDriverId != resolvedMorningDriverId {
+            await prefetchAndCacheRouteStops(requestId: resolvedEveningRequestId, session: "Evening")
+            attachTripListener(driverId: resolvedEveningDriverId, session: "Evening", requestId: resolvedEveningRequestId)
+        } else if !resolvedEveningDriverId.isEmpty && resolvedEveningDriverId == resolvedMorningDriverId {
+            await prefetchAndCacheRouteStops(requestId: resolvedEveningRequestId, session: "Evening")
+            attachTripListener(driverId: resolvedEveningDriverId, session: "Evening", requestId: resolvedEveningRequestId)
         }
     }
 
-    // Trip listeners
+    private func prefetchAndCacheRouteStops(requestId: String, session: String) async {
+        do {
+            let joinRequestDocument = try await Firestore.firestore()
+                .collection("joinRequests")
+                .document(requestId)
+                .getDocument()
+
+            guard let documentData = joinRequestDocument.data(),
+                  let routeId = documentData["routeId"] as? String,
+                  !routeId.isEmpty else { return }
+
+            let fetchedRouteModel = try await RouteService.shared.fetchRoute(routeId: routeId)
+            let orderedStopNames = buildOrderedStopNamesFromRouteModel(routeModel: fetchedRouteModel, sessionLabel: session)
+
+            if session == "Morning" {
+                cachedMorningRouteStops = orderedStopNames
+                hasAlreadyFiredMorningPickupProximityAlert = false
+                hasAlreadyFiredMorningDropoffProximityAlert = false
+            } else {
+                cachedEveningRouteStops = orderedStopNames
+                hasAlreadyFiredEveningPickupProximityAlert = false
+                hasAlreadyFiredEveningDropoffProximityAlert = false
+            }
+
+            print("[PassengerDashboardVM] Cached \(orderedStopNames.count) stops for \(session) session.")
+        } catch {
+            print("[PassengerDashboardVM] Failed to prefetch route stops for \(session): \(error.localizedDescription)")
+        }
+    }
+
+    private func buildOrderedStopNamesFromRouteModel(routeModel: RouteModel, sessionLabel: String) -> [String] {
+        let startStopName = routeModel.startName ?? routeModel.startLocation.locationName
+        let endStopName = routeModel.endName ?? routeModel.endLocation.locationName
+        let intermediateStopNames = routeModel.routeStops
+            .sorted(by: { $0.stopOrder < $1.stopOrder })
+            .map(\.stopName)
+
+        var orderedStopNames = [startStopName] + intermediateStopNames + [endStopName]
+
+        if sessionLabel == "Evening" {
+            orderedStopNames.reverse()
+        }
+
+        return orderedStopNames
+    }
 
     private func attachTripListener(driverId: String, session: String, requestId: String) {
-        guard !driverId.isEmpty else {
-            print("🔴 [PassengerDashboardVM] attachTripListener called with empty driverId — skipping")
-            return
-        }
+        guard !driverId.isEmpty else { return }
 
-        print("🔵 [PassengerDashboardVM] Attaching trip listener — driverId: \(driverId) session: \(session)")
+        print("[PassengerDashboardVM] Attaching trip listener — driverId: \(driverId) session: \(session)")
 
-        let listener = TripService.shared.listenForActiveTrip(driverId: driverId, session: session) { [weak self] trip in
+        let tripListener = TripService.shared.listenForActiveTrip(driverId: driverId, session: session) { [weak self] updatedTrip in
             guard let self else { return }
             Task { @MainActor in
-                let previousTrip = session == "Morning" ? self.morningTrip : self.eveningTrip
+                let previousTripState = session == "Morning" ? self.morningTrip : self.eveningTrip
+
                 if session == "Morning" {
-                    self.morningTrip = trip
+                    self.morningTrip = updatedTrip
                 } else {
-                    self.eveningTrip = trip
+                    self.eveningTrip = updatedTrip
                 }
-                print("🟢 [PassengerDashboardVM] Trip update (\(session)): \(trip?.status ?? "nil") id: \(trip?.id ?? "nil")")
-                self.handleTripStateChange(trip: trip, previous: previousTrip, session: session, requestId: requestId)
+
+                print("[PassengerDashboardVM] Trip update (\(session)): \(updatedTrip?.status ?? "nil") stopIndex: \(updatedTrip?.currentStopIndex ?? -1)")
+                self.handleTripStateChange(trip: updatedTrip, previous: previousTripState, session: session, requestId: requestId)
             }
         }
+
         if session == "Morning" {
             _morningTripListener?.remove()
-            _morningTripListener = listener
+            _morningTripListener = tripListener
         } else {
             _eveningTripListener?.remove()
-            _eveningTripListener = listener
+            _eveningTripListener = tripListener
         }
 
-        // Attach attendance listener using the passenger's routeId from the joinRequest
         Task {
-            if let doc = try? await Firestore.firestore().collection("joinRequests").document(requestId).getDocument(),
-               let routeId = doc.data()?["routeId"] as? String, !routeId.isEmpty {
+            if let joinRequestDoc = try? await Firestore.firestore().collection("joinRequests").document(requestId).getDocument(),
+               let routeId = joinRequestDoc.data()?["routeId"] as? String, !routeId.isEmpty {
                 attachAttendanceListener(
                     passengerId: passengerId,
                     routeId: routeId,
@@ -312,177 +352,283 @@ final class PassengerDashboardViewModel: ObservableObject {
     }
 
     private func handleTripStateChange(trip: TripModel?, previous: TripModel?, session: String, requestId: String) {
-        guard let trip else { return }
-        let wasNil = previous == nil
-        let justStarted = wasNil && trip.status == "active"
-        let justCompleted = (previous?.status == "active") && trip.status == "completed"
+        let currentPassengerId = passengerId
 
-        if justStarted {
-            NotificationManager.shared.scheduleNotification(
-                title: "🚌 Your Bus Has Departed!",
-                body: "\(session) trip has started. Open the app to track live location.",
-                actionType: "TRIP_START",
-                isTripAlert: true
+        if let activeTripUpdate = trip, activeTripUpdate.status == "active" {
+            let tripJustBecameActive = previous == nil || previous?.status != "active"
+
+            if tripJustBecameActive {
+                resetProximityAlertFlagsForSession(session: session)
+                NotificationManager.shared.scheduleNotification(
+                    title: "Your Bus Has Departed",
+                    body: "\(session) trip has started. Open the app to track the live location.",
+                    actionType: "TRIP_START",
+                    isTripAlert: true,
+                    explicitUserId: currentPassengerId
+                )
+            }
+
+            let currentStopIndex = activeTripUpdate.currentStopIndex ?? 0
+            evaluateProximityAlertForSession(
+                session: session,
+                currentStopIndex: currentStopIndex,
+                passengerId: currentPassengerId
             )
         }
 
-        if justCompleted {
+        if let completedTripUpdate = trip, completedTripUpdate.status == "completed",
+           previous?.status == "active" {
             NotificationManager.shared.scheduleNotification(
                 title: "Trip Completed",
-                body: "Your \(session.lowercased()) trip is done. Mark your attendance for tomorrow!",
+                body: "Your \(session.lowercased()) trip has ended. Have a great day!",
                 actionType: "TRIP_END",
-                isTripAlert: true
+                isTripAlert: true,
+                explicitUserId: currentPassengerId
             )
-            // Schedule a next-morning reminder notification
             scheduleAttendanceReminder(session: session)
         }
     }
 
-    // Attendance listeners
+    private func evaluateProximityAlertForSession(session: String, currentStopIndex: Int, passengerId: String) {
+        guard let enrolledService = (session == "Morning" ? morningService : eveningService) else { return }
+
+        let cachedStopsForSession = session == "Morning" ? cachedMorningRouteStops : cachedEveningRouteStops
+        guard !cachedStopsForSession.isEmpty else { return }
+
+        let passengerPickupStopName = enrolledService.routeStart
+        let passengerDropOffStopName = enrolledService.routeEnd
+
+        let safeCurrentStopIndex = min(currentStopIndex, cachedStopsForSession.count - 1)
+
+        let indexOfPassengerPickupStop = cachedStopsForSession.firstIndex(of: passengerPickupStopName)
+            ?? cachedStopsForSession.count - 1
+        let indexOfPassengerDropOffStop = cachedStopsForSession.firstIndex(of: passengerDropOffStopName)
+            ?? cachedStopsForSession.count - 1
+
+        let passengerHasAlreadyBeenPickedUp = safeCurrentStopIndex > indexOfPassengerPickupStop
+
+        let indexOfPassengerRelevantStop = passengerHasAlreadyBeenPickedUp
+            ? indexOfPassengerDropOffStop
+            : indexOfPassengerPickupStop
+
+        let numberOfStopsRemainingUntilPassengerRelevantStop = max(
+            indexOfPassengerRelevantStop - safeCurrentStopIndex,
+            0
+        )
+
+        let totalNumberOfStopsInRoute = max(cachedStopsForSession.count - 1, 1)
+        let minutesPerStop = (simulationTotalDurationSeconds / 60.0) / Double(totalNumberOfStopsInRoute)
+        let estimatedMinutesUntilPassengerRelevantStop = Int(
+            Double(numberOfStopsRemainingUntilPassengerRelevantStop) * minutesPerStop
+        )
+
+        print("[PassengerDashboardVM] Proximity check (\(session)) — stopIndex: \(safeCurrentStopIndex), stopsUntilRelevant: \(numberOfStopsRemainingUntilPassengerRelevantStop), estMins: \(estimatedMinutesUntilPassengerRelevantStop), pickedUp: \(passengerHasAlreadyBeenPickedUp)")
+
+        let hasAlreadyFiredPickup = session == "Morning"
+            ? hasAlreadyFiredMorningPickupProximityAlert
+            : hasAlreadyFiredEveningPickupProximityAlert
+        let hasAlreadyFiredDropoff = session == "Morning"
+            ? hasAlreadyFiredMorningDropoffProximityAlert
+            : hasAlreadyFiredEveningDropoffProximityAlert
+
+        if !passengerHasAlreadyBeenPickedUp
+            && !hasAlreadyFiredPickup
+            && estimatedMinutesUntilPassengerRelevantStop <= proximityAlertThresholdInMinutes
+            && estimatedMinutesUntilPassengerRelevantStop >= 0 {
+
+            if session == "Morning" {
+                hasAlreadyFiredMorningPickupProximityAlert = true
+            } else {
+                hasAlreadyFiredEveningPickupProximityAlert = true
+            }
+
+            NotificationManager.shared.scheduleNotification(
+                title: "Bus Approaching Your Pickup Stop",
+                body: "Your bus is approximately \(estimatedMinutesUntilPassengerRelevantStop) minute\(estimatedMinutesUntilPassengerRelevantStop == 1 ? "" : "s") away from \(passengerPickupStopName). Please be ready.",
+                actionType: "BUS_APPROACHING_PICKUP",
+                isTripAlert: true,
+                explicitUserId: passengerId
+            )
+        }
+
+        if passengerHasAlreadyBeenPickedUp
+            && !hasAlreadyFiredDropoff
+            && estimatedMinutesUntilPassengerRelevantStop <= proximityAlertThresholdInMinutes
+            && estimatedMinutesUntilPassengerRelevantStop >= 0 {
+
+            if session == "Morning" {
+                hasAlreadyFiredMorningDropoffProximityAlert = true
+            } else {
+                hasAlreadyFiredEveningDropoffProximityAlert = true
+            }
+
+            NotificationManager.shared.scheduleNotification(
+                title: "Approaching Your Drop-off Stop",
+                body: "Your destination \(passengerDropOffStopName) is approximately \(estimatedMinutesUntilPassengerRelevantStop) minute\(estimatedMinutesUntilPassengerRelevantStop == 1 ? "" : "s") away. Prepare to alight.",
+                actionType: "BUS_APPROACHING_DROPOFF",
+                isTripAlert: true,
+                explicitUserId: passengerId
+            )
+        }
+    }
+
+    private func resetProximityAlertFlagsForSession(session: String) {
+        if session == "Morning" {
+            hasAlreadyFiredMorningPickupProximityAlert = false
+            hasAlreadyFiredMorningDropoffProximityAlert = false
+        } else {
+            hasAlreadyFiredEveningPickupProximityAlert = false
+            hasAlreadyFiredEveningDropoffProximityAlert = false
+        }
+    }
 
     private func attachAttendanceListener(passengerId: String, routeId: String, session: String, requestId: String) {
         let targetDate = AttendanceService.relevantDate()
-        let listener = AttendanceService.shared.listenForAttendance(
+        let attendanceListener = AttendanceService.shared.listenForAttendance(
             passengerId: passengerId,
             routeId: routeId,
             session: session,
             date: targetDate
-        ) { [weak self] record in
+        ) { [weak self] fetchedRecord in
             guard let self else { return }
             Task { @MainActor in
                 if session == "Morning" {
-                    self.morningAttendance = record
+                    self.morningAttendance = fetchedRecord
                 } else {
-                    self.eveningAttendance = record
+                    self.eveningAttendance = fetchedRecord
                 }
             }
         }
+
         if session == "Morning" {
             _morningAttendanceListener?.remove()
-            _morningAttendanceListener = listener
+            _morningAttendanceListener = attendanceListener
         } else {
             _eveningAttendanceListener?.remove()
-            _eveningAttendanceListener = listener
+            _eveningAttendanceListener = attendanceListener
         }
     }
 
-    // Mark attendance
-
     func markAttendance(status: String) {
-        let session = selectedTrip == .morning ? "Morning" : "Evening"
-        let requestId = selectedTrip == .morning ? morningRequestId : eveningRequestId
-        guard !passengerId.isEmpty, !requestId.isEmpty else { return }
+        let sessionLabel = selectedTrip == .morning ? "Morning" : "Evening"
+        let activeRequestId = selectedTrip == .morning ? morningRequestId : eveningRequestId
+        guard !passengerId.isEmpty, !activeRequestId.isEmpty else { return }
 
         isMarkingAttendance = true
         Task {
             do {
-                // Fetch the routeId from the joinRequest document
-                var routeId = ""
-                if let doc = try? await Firestore.firestore()
-                    .collection("joinRequests").document(requestId).getDocument(),
-                   let fetchedRouteId = doc.data()?["routeId"] as? String {
-                    routeId = fetchedRouteId
+                var resolvedRouteId = ""
+                if let joinRequestDoc = try? await Firestore.firestore()
+                    .collection("joinRequests").document(activeRequestId).getDocument(),
+                   let fetchedRouteId = joinRequestDoc.data()?["routeId"] as? String {
+                    resolvedRouteId = fetchedRouteId
                 }
-                guard !routeId.isEmpty else {
-                    print("🔴 [PassengerDashboardVM] Could not resolve routeId for requestId: \(requestId)")
+                guard !resolvedRouteId.isEmpty else {
+                    print("[PassengerDashboardVM] Could not resolve routeId for requestId: \(activeRequestId)")
                     self.isMarkingAttendance = false
                     return
                 }
                 let targetDate = AttendanceService.relevantDate()
                 try await AttendanceService.shared.markAttendance(
                     passengerId: passengerId,
-                    routeId: routeId,
-                    requestId: requestId,
-                    session: session,
+                    routeId: resolvedRouteId,
+                    requestId: activeRequestId,
+                    session: sessionLabel,
                     date: targetDate,
                     status: status
                 )
-                print("🟢 [PassengerDashboardVM] Marked \(session) attendance: \(status)")
+                print("[PassengerDashboardVM] Marked \(sessionLabel) attendance: \(status)")
             } catch {
-                print("🔴 [PassengerDashboardVM] Attendance error: \(error.localizedDescription)")
+                print("[PassengerDashboardVM] Attendance error: \(error.localizedDescription)")
             }
             self.isMarkingAttendance = false
         }
     }
 
-    // Attendance reminder notification
-
     private func scheduleAttendanceReminder(session: String) {
-        var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
-        components.day! += 1
-        components.hour = session == "Morning" ? 6 : 14
-        components.minute = 30
+        var tomorrowComponents = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        tomorrowComponents.day! += 1
+        tomorrowComponents.hour = session == "Morning" ? 6 : 14
+        tomorrowComponents.minute = 30
 
-        let content = UNMutableNotificationContent()
-        content.title = "Mark Your Attendance"
-        content.body = "Don't forget to confirm your \(session.lowercased()) trip attendance for today!"
-        content.sound = .default
+        let reminderNotificationContent = UNMutableNotificationContent()
+        reminderNotificationContent.title = "Mark Your Attendance"
+        reminderNotificationContent.body = "Don't forget to confirm your \(session.lowercased()) trip attendance for today!"
+        reminderNotificationContent.sound = .default
 
-        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-        let request = UNNotificationRequest(
+        let calendarTrigger = UNCalendarNotificationTrigger(dateMatching: tomorrowComponents, repeats: false)
+        let reminderRequest = UNNotificationRequest(
             identifier: "attendance_reminder_\(session)_\(Date().timeIntervalSince1970)",
-            content: content,
-            trigger: trigger
+            content: reminderNotificationContent,
+            trigger: calendarTrigger
         )
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error {
-                print("🔴 [PassengerDashboardVM] Reminder scheduling error: \(error.localizedDescription)")
+        UNUserNotificationCenter.current().add(reminderRequest) { schedulingError in
+            if let schedulingError {
+                print("[PassengerDashboardVM] Reminder scheduling error: \(schedulingError.localizedDescription)")
             } else {
-                print("🟢 [PassengerDashboardVM] \(session) reminder scheduled for tomorrow")
+                print("[PassengerDashboardVM] \(session) reminder scheduled for tomorrow.")
             }
         }
     }
 
-    // Build EnrolledService from JoinRequestModel
-
     private func buildEnrolledService(from req: JoinRequestModel, docId: String) async -> EnrolledService? {
         guard let route = try? await RouteService.shared.fetchRoute(routeId: req.routeId) else { return nil }
-        let driver = try? await DriverService.shared.fetchDriver(driverId: req.driverId)
+        let driverProfile = try? await DriverService.shared.fetchDriver(driverId: req.driverId)
 
-        let driverName   = driver?.fullName ?? "Driver"
-        let vehicleBrand = driver?.busInformation.busName ?? "Bus"
-        let vehicleType  = driver?.busInformation.busType ?? "Bus"
-        let plateNumber  = driver?.busInformation.plateNumber ?? "—"
+        let driverFullName = driverProfile?.fullName ?? "Driver"
+        let vehicleBrandName = driverProfile?.busInformation.busName ?? "Bus"
+        let vehicleTypeName = driverProfile?.busInformation.busType ?? "Bus"
+        let licensePlateNumber = driverProfile?.busInformation.plateNumber ?? "—"
 
-        func timeLabel(_ date: Date) -> String {
-            let f = DateFormatter(); f.dateFormat = "hh:mm a"
-            f.locale = Locale(identifier: "en_US_POSIX"); return f.string(from: date)
+        func formattedTimeLabel(_ date: Date) -> String {
+            let timeFormatter = DateFormatter()
+            timeFormatter.dateFormat = "hh:mm a"
+            timeFormatter.locale = Locale(identifier: "en_US_POSIX")
+            return timeFormatter.string(from: date)
         }
 
-        let morningEntry = route.scheduleEntries.first
-        let eveningEntry = route.scheduleEntries.count >= 2 ? route.scheduleEntries[1] : nil
+        let morningScheduleEntry = route.scheduleEntries.first
+        let eveningScheduleEntry = route.scheduleEntries.count >= 2 ? route.scheduleEntries[1] : nil
 
-        let morningInfo: EnrolledSessionInfo? = morningEntry.map {
-            EnrolledSessionInfo(startTime: timeLabel($0.scheduledDepartureTime),
-                                endTime:   timeLabel($0.scheduledArrivalTime ?? $0.scheduledDepartureTime),
-                                driverName: driverName, vehicleBrand: vehicleBrand,
-                                vehicleType: vehicleType, licensePlate: plateNumber)
+        let morningSessionInfo: EnrolledSessionInfo? = morningScheduleEntry.map {
+            EnrolledSessionInfo(
+                startTime: formattedTimeLabel($0.scheduledDepartureTime),
+                endTime: formattedTimeLabel($0.scheduledArrivalTime ?? $0.scheduledDepartureTime),
+                driverName: driverFullName,
+                vehicleBrand: vehicleBrandName,
+                vehicleType: vehicleTypeName,
+                licensePlate: licensePlateNumber
+            )
         }
-        let eveningInfo: EnrolledSessionInfo? = eveningEntry.map {
-            EnrolledSessionInfo(startTime: timeLabel($0.scheduledDepartureTime),
-                                endTime:   timeLabel($0.scheduledArrivalTime ?? $0.scheduledDepartureTime),
-                                driverName: driverName, vehicleBrand: vehicleBrand,
-                                vehicleType: vehicleType, licensePlate: plateNumber)
+        let eveningSessionInfo: EnrolledSessionInfo? = eveningScheduleEntry.map {
+            EnrolledSessionInfo(
+                startTime: formattedTimeLabel($0.scheduledDepartureTime),
+                endTime: formattedTimeLabel($0.scheduledArrivalTime ?? $0.scheduledDepartureTime),
+                driverName: driverFullName,
+                vehicleBrand: vehicleBrandName,
+                vehicleType: vehicleTypeName,
+                licensePlate: licensePlateNumber
+            )
         }
 
-        let sessionType: EnrolledSessionType
-        let sessionFee: Double
+        let resolvedSessionType: EnrolledSessionType
+        let resolvedSessionFee: Double
         switch req.session {
-        case "Morning": sessionType = .morning; sessionFee = route.morningPrice ?? 0
-        case "Evening": sessionType = .evening; sessionFee = route.eveningPrice ?? 0
-        default:        sessionType = .both;    sessionFee = route.bothTripsPrice ?? 0
+        case "Morning": resolvedSessionType = .morning; resolvedSessionFee = route.morningPrice ?? 0
+        case "Evening": resolvedSessionType = .evening; resolvedSessionFee = route.eveningPrice ?? 0
+        default:        resolvedSessionType = .both;    resolvedSessionFee = route.bothTripsPrice ?? 0
         }
 
         return EnrolledService(
             id: docId,
-            routeName:  "\(route.startLocation.locationName) → \(route.endLocation.locationName)",
+            routeName: "\(route.startLocation.locationName) → \(route.endLocation.locationName)",
             routeStart: req.pickupStop,
-            routeEnd:   req.dropoffStop,
-            session:    sessionType,
-            morning:    sessionType == .both || sessionType == .morning ? morningInfo : nil,
-            evening:    sessionType == .both || sessionType == .evening ? eveningInfo : nil,
-            monthlyFee: sessionFee,
-            isActive:   true
+            routeEnd: req.dropoffStop,
+            session: resolvedSessionType,
+            morning: resolvedSessionType == .both || resolvedSessionType == .morning ? morningSessionInfo : nil,
+            evening: resolvedSessionType == .both || resolvedSessionType == .evening ? eveningSessionInfo : nil,
+            monthlyFee: resolvedSessionFee,
+            isActive: true
         )
     }
 }
