@@ -14,7 +14,7 @@ import MapKit
  
 @MainActor
 final class DriverProfileViewModel: ObservableObject {
-  
+ 
     enum PassengerFilterType: String, CaseIterable, Identifiable {
         case active = "Active"
         case inactive = "Inactive"
@@ -52,7 +52,7 @@ final class DriverProfileViewModel: ObservableObject {
     enum DeadlineStatusType {
         case paid, gracePeriodActive, overdue
     }
-
+ 
     struct DriverProfileInformation {
         var driverFullName: String
         var driverPhoneNumber: String
@@ -98,7 +98,7 @@ final class DriverProfileViewModel: ObservableObject {
     }
  
     struct PassengerJoinRequest: Identifiable {
-        let id: String                 // Firestore document ID
+        let id: String
         let passengerFullName: String
         let passengerPhone: String
         let requestedPickupStopName: String
@@ -127,7 +127,9 @@ final class DriverProfileViewModel: ObservableObject {
         let reviewRatingOutOfFive: Double
         let reviewCommentText: String
     }
-    
+ 
+    // Published Properties
+ 
     @Published var driverProfileInformationValues = DriverProfileInformation(
         driverFullName:       "Loading...",
         driverPhoneNumber:    "Loading...",
@@ -170,15 +172,15 @@ final class DriverProfileViewModel: ObservableObject {
         eveningOnlyMonthlyFee:  0,
         bothSessionsMonthlyFee: 0
     )
-    
+ 
     @Published var driverProfilePhotoImageData: Data? = nil
     @Published var selectedProfilePhotoPicPickerItem: PhotosPickerItem? = nil
-
+ 
     @Published var passengerRequestsList:  [PassengerJoinRequest]  = []
     @Published var activePassengersList:   [ActivePassengerEntry]  = []
     @Published var inactivePassengersList: [InactivePassengerEntry] = []
     @Published var driverReviewsList:      [DriverReviewEntry]      = []
-  
+ 
     @Published var selectedPassengerFilterType: PassengerFilterType = .active
     @Published var isEditingDriverProfile:  Bool = false
     @Published var isEditingBusDetails:     Bool = false
@@ -186,7 +188,11 @@ final class DriverProfileViewModel: ObservableObject {
     @Published var isEditingRouteStops:     Bool = false
     @Published var isEditingSchedule:       Bool = false
     @Published var showSignOutConfirmationAlert: Bool = false
-  
+ 
+    // Core Data — Remove Local Data
+    @Published var showRemoveLocalDataConfirm: Bool = false
+    @Published var localDataRemoved: Bool = false
+ 
     @Published var editingDriverFullName:      String = ""
     @Published var editingDriverPhoneNumber:   String = ""
     @Published var editingDriverLicenseNumber: String = ""
@@ -200,23 +206,84 @@ final class DriverProfileViewModel: ObservableObject {
     @Published var editingBothSessionsFee:      String = ""
     @Published var editingMorningDepartureTime: Date   = Date()
     @Published var editingEveningDepartureTime: Date   = Date()
-
+ 
     @Published var editingRouteStartLocation: RouteLocationData? = nil
     @Published var editingRouteEndLocation: RouteLocationData? = nil
-    
+ 
     @Published var editingRouteStopsList: [RouteStopEntry] = []
     @Published var isDataLoading: Bool = false
-  
+ 
     private var currentDriverModel: DriverModel?
     private var currentRouteModel:  RouteModel?
-
-    // Stored as a nonisolated reference so deinit (which is nonisolated) can safely remove it.
-    private var _listenerRef: ListenerRegistration?
+    
+    // Delete account states
+    @Published var showDeleteAccountConfirm: Bool = false
+    @Published var isDeletingAccount: Bool = false
+    @Published var deleteAccountError: String? = nil
+    @Published var showDeleteAccountError: Bool = false
+ 
     nonisolated(unsafe) private var _listenerBox: ListenerRegistration?
-
+ 
     deinit {
         _listenerBox?.remove()
     }
+ 
+    // Core Data
+ 
+    // Populates the view from the local cache immediately, before the Firestore
+    // fetch completes, so the screen never shows "Loading..." on repeat visits.
+    func loadFromCoreData() {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        guard let cached = CoreDataManager.shared.fetchDriverProfile(userId: userId) else { return }
+ 
+        driverProfileInformationValues = DriverProfileInformation(
+            driverFullName:      cached.fullName      ?? "",
+            driverPhoneNumber:   cached.phoneNumber   ?? "",
+            driverLicenseNumber: cached.licenseNumber ?? "",
+            driverEmailAddress:  cached.emailAddress  ?? ""
+        )
+        busDetailsInformationValues = BusVehicleDetails(
+            busPlateNumber:       cached.plateNumber ?? "",
+            busDisplayName:       cached.busName     ?? "",
+            busVehicleType:       .van,
+            busPassengerCapacity: 0
+        )
+        
+        print("[CoreData] Loaded from cache — name: \(driverProfileInformationValues.driverFullName)")
+    }
+ 
+    // Persists the current in-memory profile to Core Data after a successful
+    // Firestore fetch. Called internally at the end of fetchDriverProfile().
+    private func cacheProfileLocally() {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        CoreDataManager.shared.saveDriverProfile(
+            userId:           userId,
+            fullName:         driverProfileInformationValues.driverFullName,
+            phoneNumber:      driverProfileInformationValues.driverPhoneNumber,
+            emailAddress:     driverProfileInformationValues.driverEmailAddress,
+            licenseNumber:    driverProfileInformationValues.driverLicenseNumber,
+            busName:          busDetailsInformationValues.busDisplayName,
+            plateNumber:      busDetailsInformationValues.busPlateNumber,
+            profilePhotoData: driverProfilePhotoImageData
+        )
+        
+        print("[CoreData] Cached driver profile for userId: \(userId)")
+    }
+ 
+    // Removes every Core Data record for the current user.
+    // Called from the "Remove Local Data" button in DriverProfileView.
+    func removeLocalData() {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        CoreDataManager.shared.deleteAllLocalData(userId: userId)
+        driverProfileInformationValues = DriverProfileInformation(
+            driverFullName: "", driverPhoneNumber: "",
+            driverLicenseNumber: "", driverEmailAddress: ""
+        )
+        driverProfilePhotoImageData = nil
+        localDataRemoved = true
+    }
+ 
+    // Firestore Fetch
  
     func fetchDriverProfile() {
         guard let userId = Auth.auth().currentUser?.uid else { return }
@@ -226,7 +293,7 @@ final class DriverProfileViewModel: ObservableObject {
                 let driver = try await DriverService.shared.fetchDriver(driverId: userId)
                 let user   = try await UserService.shared.fetchUser(userId: userId)
                 self.currentDriverModel = driver
-
+ 
                 self.driverProfileInformationValues = DriverProfileInformation(
                     driverFullName:      driver.fullName,
                     driverPhoneNumber:   user?.phoneNumber ?? "No Phone Number",
@@ -243,7 +310,7 @@ final class DriverProfileViewModel: ObservableObject {
  
                 self.driverAvailabilityStatusIsOnline = (driver.serviceStatus ?? "active") == "active"
                 self.driverAcceptingRequestsState     = driver.isAcceptingRequests ?? true
-
+ 
                 if let base64String = driver.profilePhotoBase64,
                    !base64String.isEmpty,
                    let imageData = Data(base64Encoded: base64String) {
@@ -264,12 +331,12 @@ final class DriverProfileViewModel: ObservableObject {
                     }
  
                     self.routeInformationValues = RouteInformation(
-                        routeStartingPointName:   route.startLocation.locationName,
-                        routeEndingPointName:     route.endLocation.locationName,
-                        orderedListOfRouteStops:  stopsData
+                        routeStartingPointName:  route.startLocation.locationName,
+                        routeEndingPointName:    route.endLocation.locationName,
+                        orderedListOfRouteStops: stopsData
                     )
  
-                    let timeFormatter      = DateFormatter()
+                    let timeFormatter       = DateFormatter()
                     timeFormatter.timeStyle = .short
  
                     var morningDept = "N/A"; var morningArr = "N/A"
@@ -301,16 +368,20 @@ final class DriverProfileViewModel: ObservableObject {
                 }
  
                 self.isDataLoading = false
-
+ 
+                // Persist the fresh data locally for offline use
+                self.cacheProfileLocally()
+ 
                 // Start listening for join requests once driver is loaded
                 self.listenForJoinRequests(driverId: userId)
             } catch {
-
                 self.driverProfileInformationValues.driverFullName = "Error Loading"
                 self.isDataLoading = false
             }
         }
     }
+ 
+    // Computed Properties
  
     var driverProfileInitialsText: String {
         let parts = driverProfileInformationValues.driverFullName.split(separator: " ")
@@ -325,12 +396,13 @@ final class DriverProfileViewModel: ObservableObject {
         return driverReviewsList.reduce(0.0) { $0 + $1.reviewRatingOutOfFive } / Double(driverReviewsList.count)
     }
  
+    // Profile Editing
+ 
     func openDriverProfileEditMode() {
         editingDriverFullName      = driverProfileInformationValues.driverFullName
         editingDriverPhoneNumber   = driverProfileInformationValues.driverPhoneNumber
         editingDriverLicenseNumber = driverProfileInformationValues.driverLicenseNumber
         editingDriverEmailAddress  = driverProfileInformationValues.driverEmailAddress
- 
         isEditingDriverProfile = true
     }
  
@@ -339,7 +411,7 @@ final class DriverProfileViewModel: ObservableObject {
             driverProfileInformationValues.driverFullName = editingDriverFullName
         }
         driverProfileInformationValues.driverLicenseNumber = editingDriverLicenseNumber
-        driverProfileInformationValues.driverEmailAddress = editingDriverEmailAddress
+        driverProfileInformationValues.driverEmailAddress  = editingDriverEmailAddress
  
         if var driverModel = currentDriverModel {
             driverModel.fullName      = driverProfileInformationValues.driverFullName
@@ -350,10 +422,7 @@ final class DriverProfileViewModel: ObservableObject {
                     if let userId = driverModel.id ?? Auth.auth().currentUser?.uid {
                         try await DriverService.shared.updateDriver(driverId: userId, updatedRecord: driverModel)
                         try await UserService.shared.updateUserRoleAndName(userId: userId, updatedRole: "driver", fullName: driverModel.fullName)
-                        try await UserService.shared.updateUserEmailAddress(
-                            userId:       userId,
-                            updatedEmailAddress: editingDriverEmailAddress
-                        )
+                        try await UserService.shared.updateUserEmailAddress(userId: userId, updatedEmailAddress: editingDriverEmailAddress)
                     }
                 } catch {
                     print("Could not update profile: \(error)")
@@ -361,13 +430,16 @@ final class DriverProfileViewModel: ObservableObject {
             }
             self.currentDriverModel = driverModel
         }
+ 
+        // Sync the edited values back to Core Data
+        cacheProfileLocally()
         isEditingDriverProfile = false
     }
  
     func cancelDriverProfileEdits() {
         isEditingDriverProfile = false
     }
-    
+ 
     func processAndUploadSelectedProfilePhoto(selectedPhotoPickerItem item: PhotosPickerItem) {
         Task {
             guard let rawData = try? await item.loadTransferable(type: Data.self) else { return }
@@ -388,13 +460,15 @@ final class DriverProfileViewModel: ObservableObject {
                 do {
                     try await DriverService.shared.updateDriver(driverId: userId, updatedRecord: driverModel)
                     self.currentDriverModel = driverModel
+                    // Update the cached photo in Core Data
+                    self.cacheProfileLocally()
                 } catch {
                     print("Failed to save profile photo to Firestore: \(error)")
                 }
             }
         }
     }
-
+ 
     func refreshDisplayedPhoneNumber() {
         Task {
             guard let userId = Auth.auth().currentUser?.uid else { return }
@@ -407,6 +481,7 @@ final class DriverProfileViewModel: ObservableObject {
         }
     }
  
+    // Bus Details Editing
     func openBusDetailsEditMode() {
         editingBusPlateNumber       = busDetailsInformationValues.busPlateNumber
         editingBusDisplayName       = busDetailsInformationValues.busDisplayName
@@ -415,8 +490,8 @@ final class DriverProfileViewModel: ObservableObject {
     }
  
     func saveBusDetailsEdits() {
-        busDetailsInformationValues.busPlateNumber  = editingBusPlateNumber
-        busDetailsInformationValues.busDisplayName  = editingBusDisplayName
+        busDetailsInformationValues.busPlateNumber = editingBusPlateNumber
+        busDetailsInformationValues.busDisplayName = editingBusDisplayName
         if let parsed = Int(editingBusPassengerCapacity) {
             busDetailsInformationValues.busPassengerCapacity = parsed
         }
@@ -435,6 +510,8 @@ final class DriverProfileViewModel: ObservableObject {
             }
             self.currentDriverModel = driverModel
         }
+ 
+        cacheProfileLocally()
         isEditingBusDetails = false
     }
  
@@ -442,9 +519,11 @@ final class DriverProfileViewModel: ObservableObject {
         isEditingBusDetails = false
     }
  
+    // Pricing Editing
+ 
     func openPricingDetailsEditMode() {
-        editingMorningOnlyFee = "\(pricingDetailsValues.morningOnlyMonthlyFee)"
-        editingEveningOnlyFee = "\(pricingDetailsValues.eveningOnlyMonthlyFee)"
+        editingMorningOnlyFee  = "\(pricingDetailsValues.morningOnlyMonthlyFee)"
+        editingEveningOnlyFee  = "\(pricingDetailsValues.eveningOnlyMonthlyFee)"
         editingBothSessionsFee = "\(pricingDetailsValues.bothSessionsMonthlyFee)"
         isEditingPricingDetails = true
     }
@@ -475,6 +554,8 @@ final class DriverProfileViewModel: ObservableObject {
         isEditingPricingDetails = false
     }
  
+    // Schedule Editing
+ 
     func openScheduleEditMode() {
         if let routeModel = currentRouteModel, routeModel.scheduleEntries.count > 1 {
             editingMorningDepartureTime = routeModel.scheduleEntries[0].scheduledDepartureTime
@@ -488,45 +569,45 @@ final class DriverProfileViewModel: ObservableObject {
             isEditingSchedule = false
             return
         }
-        
+ 
         let startLoc = editingRouteStartLocation ?? routeModel.startLocation
-        let endLoc = editingRouteEndLocation ?? routeModel.endLocation
-        
+        let endLoc   = editingRouteEndLocation   ?? routeModel.endLocation
+ 
         let req = MKDirections.Request()
-        req.source = MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: startLoc.latitude, longitude: startLoc.longitude)))
+        req.source      = MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: startLoc.latitude, longitude: startLoc.longitude)))
         req.destination = MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: endLoc.latitude, longitude: endLoc.longitude)))
         req.transportType = .automobile
-        
+ 
         Task {
             var travelMinutes = (routeInformationValues.orderedListOfRouteStops.count + 1) * 8
             do {
                 let directions = MKDirections(request: req)
-                let response = try await directions.calculate()
+                let response   = try await directions.calculate()
                 if let route = response.routes.first {
                     let travelTimeSeconds = route.expectedTravelTime
-                    let stopDelaySeconds = Double(routeInformationValues.orderedListOfRouteStops.count * 3 * 60)
+                    let stopDelaySeconds  = Double(routeInformationValues.orderedListOfRouteStops.count * 3 * 60)
                     travelMinutes = Int((travelTimeSeconds + stopDelaySeconds) / 60)
                 }
             } catch {
                 print("Could not calculate exact ETA, falling back: \(error)")
             }
-            
+ 
             let newMorningArrival = Calendar.current.date(byAdding: .minute, value: travelMinutes, to: self.editingMorningDepartureTime) ?? self.editingMorningDepartureTime
             let newEveningArrival = Calendar.current.date(byAdding: .minute, value: travelMinutes, to: self.editingEveningDepartureTime) ?? self.editingEveningDepartureTime
-            
+ 
             routeModel.scheduleEntries[0].scheduledDepartureTime = self.editingMorningDepartureTime
             routeModel.scheduleEntries[0].scheduledArrivalTime   = newMorningArrival
             routeModel.scheduleEntries[1].scheduledDepartureTime = self.editingEveningDepartureTime
             routeModel.scheduleEntries[1].scheduledArrivalTime   = newEveningArrival
-            
+ 
             do {
                 if let routeId = self.currentDriverModel?.assignedRouteId {
                     try await RouteService.shared.updateRoute(routeId: routeId, updatedRecord: routeModel)
                 }
             } catch { print("Update schedule error: \(error)") }
-            
+ 
             self.currentRouteModel = routeModel
-            
+ 
             let f = DateFormatter(); f.timeStyle = .short
             self.scheduleDetailsValues = ScheduleDetailsInformation(
                 morningTripSchedule: TripScheduleTime(departureTime: f.string(from: self.editingMorningDepartureTime), estimatedArrivalTime: f.string(from: newMorningArrival)),
@@ -540,10 +621,12 @@ final class DriverProfileViewModel: ObservableObject {
         isEditingSchedule = false
     }
  
+    // Route Stop Editing
+ 
     func openRouteEditMode() {
         if let route = currentRouteModel {
             editingRouteStartLocation = route.startLocation
-            editingRouteEndLocation = route.endLocation
+            editingRouteEndLocation   = route.endLocation
         }
         editingRouteStopsList = routeInformationValues.orderedListOfRouteStops
         isEditingRouteStops = true
@@ -551,13 +634,9 @@ final class DriverProfileViewModel: ObservableObject {
  
     func saveRouteEdits() {
         routeInformationValues.orderedListOfRouteStops = editingRouteStopsList
-        
-        if let start = editingRouteStartLocation {
-            routeInformationValues.routeStartingPointName = start.locationName
-        }
-        if let end = editingRouteEndLocation {
-            routeInformationValues.routeEndingPointName = end.locationName
-        }
+ 
+        if let start = editingRouteStartLocation { routeInformationValues.routeStartingPointName = start.locationName }
+        if let end   = editingRouteEndLocation   { routeInformationValues.routeEndingPointName   = end.locationName   }
  
         if var routeModel = currentRouteModel {
             let newStops = editingRouteStopsList.enumerated().map { (index, stopEntry) in
@@ -569,9 +648,8 @@ final class DriverProfileViewModel: ObservableObject {
                 )
             }
             routeModel.routeStops = newStops
-            
             if let start = editingRouteStartLocation { routeModel.startLocation = start }
-            if let end = editingRouteEndLocation { routeModel.endLocation = end }
+            if let end   = editingRouteEndLocation   { routeModel.endLocation   = end   }
  
             Task {
                 do {
@@ -612,7 +690,8 @@ final class DriverProfileViewModel: ObservableObject {
             )
         }
     }
-    
+ 
+    // Status Pushes
     func pushServiceStatusUpdate() {
         if var driverModel = currentDriverModel, !isDataLoading {
             driverModel.serviceStatus = driverAvailabilityStatusIsOnline ? "active" : "offline"
@@ -641,10 +720,9 @@ final class DriverProfileViewModel: ObservableObject {
         }
     }
  
-    // Join request listener
-
+    // Join Request Listener
+ 
     private func listenForJoinRequests(driverId: String) {
-        // Remove any existing listener before attaching a new one
         _listenerBox?.remove()
         _listenerBox = JoinRequestService.shared.listenForPendingRequests(driverId: driverId) { [weak self] models in
             guard let self else { return }
@@ -660,16 +738,14 @@ final class DriverProfileViewModel: ObservableObject {
                     }
                     return PassengerJoinRequest(
                         id: docId,
-                        passengerFullName:           model.passengerName,
-                        passengerPhone:              model.passengerPhone,
-                        requestedPickupStopName:     model.pickupStop,
+                        passengerFullName:            model.passengerName,
+                        passengerPhone:               model.passengerPhone,
+                        requestedPickupStopName:      model.pickupStop,
                         requestedDropOffLocationName: model.dropoffStop,
-                        preferredSessionType:        sessionPref,
-                        noteFromPassenger:           model.note
+                        preferredSessionType:         sessionPref,
+                        noteFromPassenger:            model.note
                     )
                 }
-
-                // If the number of pending requests went up, someone just sent a new one
                 if models.count > previousCount {
                     NotificationManager.shared.scheduleNotification(
                         title: "New Join Request",
@@ -680,13 +756,14 @@ final class DriverProfileViewModel: ObservableObject {
             }
         }
     }
-
+ 
+    //Passenger Join request
     func acceptPassengerJoinRequest(requestIdentifier: String) {
         Task {
             do {
                 try await JoinRequestService.shared.updateStatus(requestId: requestIdentifier, status: "accepted")
             } catch {
-                print("🔴 [DriverProfileVM] Accept request failed: \(error.localizedDescription)")
+                print("[DriverProfileVM] Accept request failed: \(error.localizedDescription)")
             }
         }
     }
@@ -696,7 +773,7 @@ final class DriverProfileViewModel: ObservableObject {
             do {
                 try await JoinRequestService.shared.updateStatus(requestId: requestIdentifier, status: "rejected")
             } catch {
-                print("🔴 [DriverProfileVM] Reject request failed: \(error.localizedDescription)")
+                print("[DriverProfileVM] Reject request failed: \(error.localizedDescription)")
             }
         }
     }
@@ -710,5 +787,27 @@ final class DriverProfileViewModel: ObservableObject {
         }
     }
     
-    func signOut() { AuthManager.shared.signOut() }
+    //Sign Out
+    func signOut() {
+        if let userId = Auth.auth().currentUser?.uid {
+            CoreDataManager.shared.deleteAllLocalData(userId: userId)
+        }
+        AuthManager.shared.signOut()
+    }
+    
+    func deleteAccount() {
+            isDeletingAccount = true
+            Task {
+                do {
+                    try await AccountDeletionService.shared.deleteCurrentUserAccount(role: "driver")
+                    // Auth deletion succeeded — sign out cleans up UserDefaults.
+                    AuthManager.shared.signOut()
+                } catch {
+                    isDeletingAccount     = false
+                    deleteAccountError    = error.localizedDescription
+                    showDeleteAccountError = true
+                    print("[DriverProfileViewModel] Account deletion failed: \(error.localizedDescription)")
+                }
+            }
+        }
 }
