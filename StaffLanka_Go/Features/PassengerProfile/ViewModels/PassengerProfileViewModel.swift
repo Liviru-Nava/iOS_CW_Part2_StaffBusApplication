@@ -152,6 +152,7 @@ final class PassengerProfileViewModel: ObservableObject {
     }
  
     //Delete Account
+ 
     func deleteAccount() {
         isDeletingAccount = true
         Task {

@@ -48,13 +48,14 @@ struct RootView: View {
         guard !authManager.storedPhoneNumber.isEmpty else { return }
 
         isBiometricAutoLoginInProgress = true
-        let biometricLoginSucceeded = await BiometricService.shared.authenticateWithBiometrics(
+        let succeeded = await BiometricService.shared.authenticateWithBiometrics(
             reasonMessage: "Sign in to StaffLanka Go"
         )
         isBiometricAutoLoginInProgress = false
 
-        if biometricLoginSucceeded {
+        if succeeded {
             authManager.signIn(phoneNumber: authManager.storedPhoneNumber)
+            authManager.completeSignIn()
         }
     }
 }

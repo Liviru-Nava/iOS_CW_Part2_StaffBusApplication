@@ -167,20 +167,16 @@ struct LoginView: View {
         Button {
             Task { await performBiometricLogin() }
         } label: {
-            HStack(spacing: 10) {
+            ZStack {
                 if isBiometricAuthenticationInProgress {
                     ProgressView().tint(.brandAccent)
                 } else {
                     Image(systemName: "faceid")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundColor(.brandAccent)
-                    Text("Sign in with \(BiometricService.shared.biometricTypeDisplayName)")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 28, weight: .medium))
                         .foregroundColor(.brandAccent)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 54)
+            .frame(width: 64, height: 54)
             .background(Color.brandAccent.opacity(0.1))
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(
@@ -243,12 +239,13 @@ struct LoginView: View {
 
     private func performBiometricLogin() async {
         isBiometricAuthenticationInProgress = true
-        let biometricAuthenticationSucceeded = await BiometricService.shared.authenticateWithBiometrics(
+        let succeeded = await BiometricService.shared.authenticateWithBiometrics(
             reasonMessage: "Sign in to StaffLanka Go"
         )
         isBiometricAuthenticationInProgress = false
-        if biometricAuthenticationSucceeded {
+        if succeeded {
             authManager.signIn(phoneNumber: authManager.storedPhoneNumber)
+            authManager.completeSignIn()
         }
     }
 }

@@ -520,7 +520,6 @@ final class DriverProfileViewModel: ObservableObject {
     }
  
     // Pricing Editing
- 
     func openPricingDetailsEditMode() {
         editingMorningOnlyFee  = "\(pricingDetailsValues.morningOnlyMonthlyFee)"
         editingEveningOnlyFee  = "\(pricingDetailsValues.eveningOnlyMonthlyFee)"
@@ -555,7 +554,6 @@ final class DriverProfileViewModel: ObservableObject {
     }
  
     // Schedule Editing
- 
     func openScheduleEditMode() {
         if let routeModel = currentRouteModel, routeModel.scheduleEntries.count > 1 {
             editingMorningDepartureTime = routeModel.scheduleEntries[0].scheduledDepartureTime
@@ -622,7 +620,6 @@ final class DriverProfileViewModel: ObservableObject {
     }
  
     // Route Stop Editing
- 
     func openRouteEditMode() {
         if let route = currentRouteModel {
             editingRouteStartLocation = route.startLocation
@@ -796,18 +793,18 @@ final class DriverProfileViewModel: ObservableObject {
     }
     
     func deleteAccount() {
-            isDeletingAccount = true
-            Task {
-                do {
-                    try await AccountDeletionService.shared.deleteCurrentUserAccount(role: "driver")
-                    // Auth deletion succeeded — sign out cleans up UserDefaults.
-                    AuthManager.shared.signOut()
-                } catch {
-                    isDeletingAccount     = false
-                    deleteAccountError    = error.localizedDescription
-                    showDeleteAccountError = true
-                    print("[DriverProfileViewModel] Account deletion failed: \(error.localizedDescription)")
-                }
+        isDeletingAccount = true
+        Task {
+            do {
+                try await AccountDeletionService.shared.deleteCurrentUserAccount(role: "driver")
+                // Auth deletion succeeded — sign out cleans up UserDefaults.
+                AuthManager.shared.signOut()
+            } catch {
+                isDeletingAccount     = false
+                deleteAccountError    = error.localizedDescription
+                showDeleteAccountError = true
+                print("[DriverProfileViewModel] Account deletion failed: \(error.localizedDescription)")
             }
         }
+    }
 }
