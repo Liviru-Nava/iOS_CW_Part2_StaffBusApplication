@@ -19,7 +19,7 @@ final class JoinRequestService {
     @discardableResult
     func submitRequest(_ model: JoinRequestModel) async throws -> String {
         let ref = try db.collection(collection).addDocument(from: model)
-        print("🟢 [JoinRequestService] Submitted request \(ref.documentID) to driver \(model.driverId)")
+        print(" [JoinRequestService] Submitted request \(ref.documentID) to driver \(model.driverId)")
         return ref.documentID
     }
 
@@ -27,14 +27,14 @@ final class JoinRequestService {
         driverId: String,
         onChange: @escaping ([JoinRequestModel]) -> Void
     ) -> ListenerRegistration {
-        print("🔵 [JoinRequestService] Attaching listener for driverId: \(driverId)")
+        print("[JoinRequestService] Attaching listener for driverId: \(driverId)")
         return db.collection(collection)
             .whereField("driverId", isEqualTo: driverId)
             .whereField("status",   isEqualTo: "pending")
             .order(by: "createdAt", descending: true)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
-                    print("🔴 [JoinRequestService] Listener error: \(error.localizedDescription)")
+                    print(" [JoinRequestService] Listener error: \(error.localizedDescription)")
                     return
                 }
                 guard let docs = snapshot?.documents else { return }
@@ -44,18 +44,18 @@ final class JoinRequestService {
                         model.id = doc.documentID
                         return model
                     } catch {
-                        print("🔴 [JoinRequestService] Decode error for \(doc.documentID): \(error)")
+                        print(" [JoinRequestService] Decode error for \(doc.documentID): \(error)")
                         return nil
                     }
                 }
-                print("🟢 [JoinRequestService] Listener fired — \(requests.count) pending request(s)")
+                print(" [JoinRequestService] Listener fired — \(requests.count) pending request(s)")
                 onChange(requests)
             }
     }
 
     func updateStatus(requestId: String, status: String) async throws {
         try await db.collection(collection).document(requestId).updateData(["status": status])
-        print("🟢 [JoinRequestService] Request \(requestId) updated to '\(status)'")
+        print(" [JoinRequestService] Request \(requestId) updated to '\(status)'")
     }
 
     // Passenger: fetch accepted (enrolled) requests
@@ -70,7 +70,7 @@ final class JoinRequestService {
             model?.id = doc.documentID
             return model
         }
-        print("🟢 [JoinRequestService] fetchAcceptedRequests — \(results.count) accepted request(s) for passenger \(passengerId)")
+        print(" [JoinRequestService] fetchAcceptedRequests — \(results.count) accepted request(s) for passenger \(passengerId)")
         return results
     }
 
@@ -80,12 +80,12 @@ final class JoinRequestService {
         passengerId: String,
         onChange: @escaping ([JoinRequestModel]) -> Void
     ) -> ListenerRegistration {
-        print("🔵 [JoinRequestService] Attaching passenger listener for passengerId: \(passengerId)")
+        print("[JoinRequestService] Attaching passenger listener for passengerId: \(passengerId)")
         return db.collection(collection)
             .whereField("passengerId", isEqualTo: passengerId)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
-                    print("🔴 [JoinRequestService] Passenger listener error: \(error.localizedDescription)")
+                    print(" [JoinRequestService] Passenger listener error: \(error.localizedDescription)")
                     return
                 }
                 guard let docs = snapshot?.documents else { return }
@@ -94,7 +94,7 @@ final class JoinRequestService {
                     model?.id = doc.documentID
                     return model
                 }
-                print("🟢 [JoinRequestService] Passenger listener fired — \(requests.count) total request(s)")
+                print(" [JoinRequestService] Passenger listener fired — \(requests.count) total request(s)")
                 onChange(requests)
             }
     }
@@ -106,6 +106,6 @@ final class JoinRequestService {
             "status": "cancelled",
             "cancelledAt": Timestamp(date: Date())
         ])
-        print("🟢 [JoinRequestService] Enrollment \(requestId) cancelled by passenger")
+        print(" [JoinRequestService] Enrollment \(requestId) cancelled by passenger")
     }
 }

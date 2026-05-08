@@ -18,7 +18,10 @@ struct JoinRequestView: View {
         routeName: String,
         routeId: String,
         driverId: String,
-        stops: [String]
+        stops: [String],
+        morningDepartureTime: Date,
+        eveningDepartureTime: Date,
+        activeDays: [String]
     ) {
         _joinRequestViewModel = StateObject(wrappedValue: JoinRequestViewModel(
             pickupLocation:      pickupLocation,
@@ -26,7 +29,10 @@ struct JoinRequestView: View {
             routeName:           routeName,
             routeId:             routeId,
             driverId:            driverId,
-            stops:               stops
+            stops:               stops,
+            morningDepartureTime: morningDepartureTime,
+            eveningDepartureTime: eveningDepartureTime,
+            activeDays:          activeDays
         ))
     }
 
@@ -82,12 +88,11 @@ struct JoinRequestView: View {
                     sessionSection
                     contactSection
 
-                    // Error banner
-                    if let errorMsg = joinRequestViewModel.submitError {
+                    if let errorMessage = joinRequestViewModel.submitError {
                         HStack(spacing: 10) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(Color.statusDanger)
-                            Text(errorMsg)
+                            Text(errorMessage)
                                 .font(.system(size: 13))
                                 .foregroundStyle(Color.statusDanger)
                             Spacer()
@@ -228,41 +233,41 @@ struct JoinRequestView: View {
                 .foregroundStyle(Color.textSecondary)
 
             HStack(spacing: 10) {
-                ForEach(JoinRequestViewModel.TripSession.allCases, id: \.self) { session in
-                    sessionChip(session)
+                ForEach(JoinRequestViewModel.TripSession.allCases, id: \.self) { tripSession in
+                    sessionChip(tripSession)
                 }
             }
         }
     }
 
-    private func sessionChip(_ session: JoinRequestViewModel.TripSession) -> some View {
-        let selected = joinRequestViewModel.selectedSession == session
+    private func sessionChip(_ tripSession: JoinRequestViewModel.TripSession) -> some View {
+        let isCurrentlySelected = joinRequestViewModel.selectedSession == tripSession
         return Button {
-            joinRequestViewModel.selectedSession = session
+            joinRequestViewModel.selectedSession = tripSession
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: sessionIcon(session))
+                Image(systemName: sessionIconName(tripSession))
                     .font(.system(size: 12))
-                Text(session.rawValue)
+                Text(tripSession.rawValue)
                     .font(.system(size: 13, weight: .semibold))
             }
-            .foregroundStyle(selected ? Color.brandPrimary : Color.textSecondary)
+            .foregroundStyle(isCurrentlySelected ? Color.brandPrimary : Color.textSecondary)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity)
-            .background(selected ? Color.brandAccent : Color.cardBackground)
+            .background(isCurrentlySelected ? Color.brandAccent : Color.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(selected ? Color.clear : Color.divider, lineWidth: 1)
+                    .strokeBorder(isCurrentlySelected ? Color.clear : Color.divider, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
         .animation(.easeInOut(duration: 0.15), value: joinRequestViewModel.selectedSession)
     }
 
-    private func sessionIcon(_ session: JoinRequestViewModel.TripSession) -> String {
-        switch session {
+    private func sessionIconName(_ tripSession: JoinRequestViewModel.TripSession) -> String {
+        switch tripSession {
         case .morning: return "sunrise.fill"
         case .evening: return "moon.fill"
         case .both:    return "arrow.left.arrow.right"
@@ -315,11 +320,30 @@ struct JoinRequestView: View {
                 Text("Request Sent!")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(Color.textPrimary)
+
                 Text("Your request to join this route has been submitted.\nWe'll notify you once the driver approves.")
                     .font(.system(size: 14))
                     .foregroundStyle(Color.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
+
+                // Shows calendar confirmation once EventKit scheduling completes
+                if joinRequestViewModel.calendarEventSchedulingCompleted {
+                    HStack(spacing: 8) {
+                        Image(systemName: "calendar.badge.checkmark")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.statusActive)
+                        Text("Trip reminders added to your Calendar")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.textSecondary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.statusActive.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(.horizontal, 30)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                }
             }
             .padding(.horizontal, 30)
 
@@ -340,6 +364,7 @@ struct JoinRequestView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 40)
         }
+        .animation(.easeInOut(duration: 0.4), value: joinRequestViewModel.calendarEventSchedulingCompleted)
     }
 }
 
@@ -437,10 +462,10 @@ struct JoinLocationPickerSheet: View {
                         .padding(.top, 40)
                         .frame(maxWidth: .infinity)
                 } else {
-                    ForEach(Array(filtered.enumerated()), id: \.element) { index, stop in
+                    ForEach(Array(filtered.enumerated()), id: \.element) { stopIndex, stopName in
                         Button {
                             if isDetectingDrag { return }
-                            selected = stop
+                            selected = stopName
                             dismiss()
                         } label: {
                             HStack(spacing: 14) {
@@ -452,11 +477,11 @@ struct JoinLocationPickerSheet: View {
                                         .font(.system(size: 14))
                                         .foregroundStyle(Color.brandAccent)
                                 }
-                                Text(stop)
+                                Text(stopName)
                                     .font(.system(size: 15, weight: .medium))
                                     .foregroundStyle(Color.textPrimary)
                                 Spacer()
-                                if selected == stop {
+                                if selected == stopName {
                                     Image(systemName: "checkmark")
                                         .font(.system(size: 13, weight: .semibold))
                                         .foregroundStyle(Color.brandAccent)
@@ -468,7 +493,7 @@ struct JoinLocationPickerSheet: View {
                         }
                         .buttonStyle(.plain)
 
-                        if index < filtered.count - 1 {
+                        if stopIndex < filtered.count - 1 {
                             Divider().padding(.leading, 72)
                         }
                     }
@@ -480,8 +505,6 @@ struct JoinLocationPickerSheet: View {
     }
 }
 
- //Previews
-
 #Preview("Dark mode") {
     JoinRequestView(
         pickupLocation: "Borella",
@@ -489,7 +512,10 @@ struct JoinLocationPickerSheet: View {
         routeName: "Colombo Fort → Maharagama",
         routeId: "preview_route",
         driverId: "preview_driver",
-        stops: ["Colombo Fort", "Borella", "Nugegoda", "Maharagama"]
+        stops: ["Colombo Fort", "Borella", "Nugegoda", "Maharagama"],
+        morningDepartureTime: Calendar.current.date(bySettingHour: 6, minute: 30, second: 0, of: Date()) ?? Date(),
+        eveningDepartureTime: Calendar.current.date(bySettingHour: 17, minute: 0, second: 0, of: Date()) ?? Date(),
+        activeDays: ["Mon", "Tue", "Wed", "Thu", "Fri"]
     )
     .preferredColorScheme(.dark)
 }
@@ -501,7 +527,10 @@ struct JoinLocationPickerSheet: View {
         routeName: "Colombo Fort → Maharagama",
         routeId: "preview_route",
         driverId: "preview_driver",
-        stops: ["Colombo Fort", "Borella", "Nugegoda", "Maharagama"]
+        stops: ["Colombo Fort", "Borella", "Nugegoda", "Maharagama"],
+        morningDepartureTime: Calendar.current.date(bySettingHour: 6, minute: 30, second: 0, of: Date()) ?? Date(),
+        eveningDepartureTime: Calendar.current.date(bySettingHour: 17, minute: 0, second: 0, of: Date()) ?? Date(),
+        activeDays: ["Mon", "Tue", "Wed", "Thu", "Fri"]
     )
     .preferredColorScheme(.light)
 }

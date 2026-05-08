@@ -17,6 +17,7 @@
 		5ABBF1FB2FADC71D00DB335D /* StaffLankaGoWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5ABBF1E82FADC71B00DB335D /* StaffLankaGoWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5ABBF2112FADCB1E00DB335D /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5ABBF2102FADCB1E00DB335D /* ActivityKit.framework */; };
 		5ABBF2122FADCB3400DB335D /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5ABBF2102FADCB1E00DB335D /* ActivityKit.framework */; };
+		5ABBF6D02FAE51F700DB335D /* EventKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5ABBF6CF2FAE51F700DB335D /* EventKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -51,6 +52,7 @@
 		5ABBF1E92FADC71B00DB335D /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		5ABBF1EB2FADC71C00DB335D /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		5ABBF2102FADCB1E00DB335D /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
+		5ABBF6CF2FAE51F700DB335D /* EventKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = EventKit.framework; path = System/Library/Frameworks/EventKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -96,6 +98,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5A7A3D0C2F8B91BC008D34BE /* FirebaseAuth in Frameworks */,
+				5ABBF6D02FAE51F700DB335D /* EventKit.framework in Frameworks */,
 				5A7A3D282F8BE112008D34BE /* FirebaseCore in Frameworks */,
 				5ABBF2112FADCB1E00DB335D /* ActivityKit.framework in Frameworks */,
 				5A7A3D262F8BDAAA008D34BE /* FirebaseFirestore in Frameworks */,
@@ -118,6 +121,7 @@
 		5A7A3D242F8BDAAA008D34BE /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				5ABBF6CF2FAE51F700DB335D /* EventKit.framework */,
 				5ABBF2102FADCB1E00DB335D /* ActivityKit.framework */,
 				5ABBF1E92FADC71B00DB335D /* WidgetKit.framework */,
 				5ABBF1EB2FADC71C00DB335D /* SwiftUI.framework */,

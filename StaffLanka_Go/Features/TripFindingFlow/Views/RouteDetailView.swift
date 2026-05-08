@@ -62,14 +62,18 @@ struct RouteDetailView: View {
                 }
             }
         }
+        // Pass all schedule data into JoinRequestView so EventKitManager can create accurate events
         .sheet(isPresented: $showJoinSheet) {
             JoinRequestView(
-                pickupLocation:      pickupLocation,
-                destinationLocation: destinationLocation,
-                routeName:           route.routeName,
-                routeId:             route.id,
-                driverId:            route.driverId,
-                stops:               routeDetailViewModel.mapStops.map { $0.name }
+                pickupLocation:       pickupLocation,
+                destinationLocation:  destinationLocation,
+                routeName:            route.routeName,
+                routeId:              route.id,
+                driverId:             route.driverId,
+                stops:                routeDetailViewModel.mapStops.map { $0.name },
+                morningDepartureTime: route.morningDeparture,
+                eveningDepartureTime: route.eveningDeparture,
+                activeDays:           route.activeDays
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
@@ -85,8 +89,6 @@ struct RouteDetailView: View {
             FullRouteMapView(stops: routeDetailViewModel.mapStops, tripType: routeDetailViewModel.selectedTrip)
         }
     }
-
-    // Main scroll content
 
     private var mainScrollContent: some View {
         ScrollView(showsIndicators: false) {
@@ -104,8 +106,6 @@ struct RouteDetailView: View {
             .padding(.bottom, 40)
         }
     }
-
-    // Map section
 
     private var mapSection: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -147,12 +147,9 @@ struct RouteDetailView: View {
         }
     }
 
-    // Driver & vehicle section
-
     private var driverVehicleSection: some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
-                // Driver avatar — show photo if available, otherwise initials
                 driverAvatar
                     .frame(width: 52, height: 52)
 
@@ -169,7 +166,6 @@ struct RouteDetailView: View {
                             .foregroundStyle(route.isAcceptingRequests ? Color.statusActive : Color.statusDanger)
                     }
                 }
-
                 Spacer()
             }
             .padding(16)
@@ -177,13 +173,13 @@ struct RouteDetailView: View {
             Divider().padding(.horizontal, 16)
 
             VStack(spacing: 0) {
-                infoRow(label: "Bus Name",    value: route.busName)
+                infoRow(label: "Bus Name",     value: route.busName)
                 Divider().padding(.leading, 16)
                 infoRow(label: "Vehicle Type", value: route.busType)
                 Divider().padding(.leading, 16)
                 infoRow(label: "License Plate", value: route.plateNumber)
                 Divider().padding(.leading, 16)
-                infoRow(label: "Capacity",    value: "\(route.capacity) seats")
+                infoRow(label: "Capacity",     value: "\(route.capacity) seats")
             }
         }
         .background(Color.cardBackground)
@@ -193,10 +189,10 @@ struct RouteDetailView: View {
 
     @ViewBuilder
     private var driverAvatar: some View {
-        if let base64 = route.profilePhotoBase64,
-           let imageData = Data(base64Encoded: base64, options: .ignoreUnknownCharacters),
-           let uiImage = UIImage(data: imageData) {
-            Image(uiImage: uiImage)
+        if let base64PhotoString = route.profilePhotoBase64,
+           let decodedImageData = Data(base64Encoded: base64PhotoString, options: .ignoreUnknownCharacters),
+           let decodedUIImage = UIImage(data: decodedImageData) {
+            Image(uiImage: decodedUIImage)
                 .resizable()
                 .scaledToFill()
                 .clipShape(Circle())
@@ -224,8 +220,6 @@ struct RouteDetailView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 13)
     }
-
-    // Trip schedule section
 
     private var tripDetailsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -284,8 +278,6 @@ struct RouteDetailView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.divider, lineWidth: 1))
     }
 
-    // Pricing section
-
     private var pricingSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Trip Pricing (LKR)")
@@ -293,11 +285,11 @@ struct RouteDetailView: View {
                 .foregroundStyle(Color.textPrimary)
 
             VStack(spacing: 0) {
-                priceRow(label: "Morning Trip", value: routeDetailViewModel.morningPriceLabel, icon: "sunrise.fill", iconColor: Color.statusWarning)
+                priceRow(label: "Morning Trip",       value: routeDetailViewModel.morningPriceLabel, icon: "sunrise.fill",                 iconColor: Color.statusWarning)
                 Divider().padding(.leading, 16)
-                priceRow(label: "Evening Trip", value: routeDetailViewModel.eveningPriceLabel, icon: "moon.fill", iconColor: Color.brandAccent)
+                priceRow(label: "Evening Trip",       value: routeDetailViewModel.eveningPriceLabel, icon: "moon.fill",                    iconColor: Color.brandAccent)
                 Divider().padding(.leading, 16)
-                priceRow(label: "Both Trips (Daily)", value: routeDetailViewModel.bothPriceLabel, icon: "arrow.triangle.2.circlepath", iconColor: Color.statusActive)
+                priceRow(label: "Both Trips (Daily)", value: routeDetailViewModel.bothPriceLabel,    icon: "arrow.triangle.2.circlepath",   iconColor: Color.statusActive)
             }
             .background(Color.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 14))
@@ -323,8 +315,6 @@ struct RouteDetailView: View {
         .padding(.vertical, 13)
     }
 
-    // Stops section
-
     private var stopsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Route Stops")
@@ -332,11 +322,11 @@ struct RouteDetailView: View {
                 .foregroundStyle(Color.textPrimary)
 
             VStack(spacing: 0) {
-                let allStops = routeDetailViewModel.mapStops
-                ForEach(Array(allStops.enumerated()), id: \.element.id) { index, stop in
+                let allRouteStops = routeDetailViewModel.mapStops
+                ForEach(Array(allRouteStops.enumerated()), id: \.element.id) { stopIndex, stop in
                     HStack(spacing: 14) {
                         VStack(spacing: 0) {
-                            if index == 0 {
+                            if stopIndex == 0 {
                                 Color.clear.frame(width: 2, height: 10)
                             } else {
                                 Rectangle()
@@ -345,7 +335,7 @@ struct RouteDetailView: View {
                             }
 
                             ZStack {
-                                if index == 0 || index == allStops.count - 1 {
+                                if stopIndex == 0 || stopIndex == allRouteStops.count - 1 {
                                     Circle()
                                         .fill(Color.brandAccent)
                                         .frame(width: 12, height: 12)
@@ -356,7 +346,7 @@ struct RouteDetailView: View {
                                 }
                             }
 
-                            if index < allStops.count - 1 {
+                            if stopIndex < allRouteStops.count - 1 {
                                 Rectangle()
                                     .fill(Color.brandAccent.opacity(0.3))
                                     .frame(width: 2, height: 10)
@@ -368,11 +358,11 @@ struct RouteDetailView: View {
 
                         Text(stop.name)
                             .font(.system(
-                                size: index == 0 || index == allStops.count - 1 ? 14 : 13,
-                                weight: index == 0 || index == allStops.count - 1 ? .semibold : .regular
+                                size: stopIndex == 0 || stopIndex == allRouteStops.count - 1 ? 14 : 13,
+                                weight: stopIndex == 0 || stopIndex == allRouteStops.count - 1 ? .semibold : .regular
                             ))
                             .foregroundStyle(
-                                index == 0 || index == allStops.count - 1
+                                stopIndex == 0 || stopIndex == allRouteStops.count - 1
                                     ? Color.textPrimary
                                     : Color.textSecondary
                             )
@@ -407,8 +397,6 @@ struct RouteDetailView: View {
         }
     }
 
-    // Reviews section
-
     private var reviewsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Passenger Reviews")
@@ -424,7 +412,6 @@ struct RouteDetailView: View {
                         .font(.system(size: 16))
                         .foregroundStyle(Color.statusWarning)
                 }
-                
                 VStack(alignment: .leading, spacing: 4) {
                     Text("No Reviews Yet")
                         .font(.system(size: 14, weight: .semibold))
@@ -441,8 +428,6 @@ struct RouteDetailView: View {
             .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.divider, lineWidth: 1))
         }
     }
-
-    // Bottom bar
 
     private var bottomBar: some View {
         VStack(spacing: 0) {
@@ -484,7 +469,8 @@ struct RouteDetailView: View {
     }
 }
 
-// Review Card
+// ReviewCard, AllReviewsSheet, FullRouteMapView, and MapStop are defined below.
+// They were originally co-located in this file and must remain here to stay in scope.
 
 struct ReviewCard: View {
     let name: String
@@ -513,10 +499,10 @@ struct ReviewCard: View {
                 }
                 Spacer()
                 HStack(spacing: 2) {
-                    ForEach(0..<5, id: \.self) { i in
+                    ForEach(0..<5, id: \.self) { starIndex in
                         Image(systemName: "star.fill")
                             .font(.system(size: 9))
-                            .foregroundStyle(i < rating ? Color.statusWarning : Color.divider)
+                            .foregroundStyle(starIndex < rating ? Color.statusWarning : Color.divider)
                     }
                 }
             }
@@ -534,12 +520,10 @@ struct ReviewCard: View {
     }
 }
 
- //All Reviews Sheet
-
 struct AllReviewsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
-    private let reviews: [(name: String, rating: Int, date: String, comment: String)] = [
+    private let allPassengerReviews: [(name: String, rating: Int, date: String, comment: String)] = [
         ("Kamal P.", 5, "2 days ago", "Great driver, always on time and safe driving. Highly recommend this service."),
         ("Sarah W.", 4, "1 week ago", "Comfortable seats. AC could be slightly cooler sometimes, but overall decent."),
         ("Nuwan J.", 5, "3 weeks ago", "Very reliable daily commute. Doesn't miss any stops and communicates delays."),
@@ -572,7 +556,7 @@ struct AllReviewsSheet: View {
 
     private var reviewsList: some View {
         VStack(spacing: 0) {
-            ForEach(Array(reviews.enumerated()), id: \.offset) { index, review in
+            ForEach(Array(allPassengerReviews.enumerated()), id: \.offset) { reviewIndex, review in
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 10) {
                         ZStack {
@@ -593,10 +577,10 @@ struct AllReviewsSheet: View {
                         }
                         Spacer()
                         HStack(spacing: 2) {
-                            ForEach(0..<5, id: \.self) { i in
+                            ForEach(0..<5, id: \.self) { starIndex in
                                 Image(systemName: "star.fill")
                                     .font(.system(size: 10))
-                                    .foregroundStyle(i < review.rating ? Color.statusWarning : Color.divider)
+                                    .foregroundStyle(starIndex < review.rating ? Color.statusWarning : Color.divider)
                             }
                         }
                     }
@@ -607,7 +591,7 @@ struct AllReviewsSheet: View {
                 }
                 .padding(.vertical, 16)
 
-                if index < reviews.count - 1 {
+                if reviewIndex < allPassengerReviews.count - 1 {
                     Divider().background(Color.divider)
                 }
             }
@@ -618,14 +602,12 @@ struct AllReviewsSheet: View {
     }
 }
 
- //Full Route Map View
-
 struct FullRouteMapView: View {
     let stops: [PassengerStop]
     let tripType: RouteDetailViewModel.TripType
     @Environment(\.dismiss) private var dismiss
 
-    var navTitle: String {
+    var navigationBarTitle: String {
         tripType == .morning ? "Morning Route" : "Evening Route"
     }
 
@@ -650,7 +632,7 @@ struct FullRouteMapView: View {
                 }
             }
             .ignoresSafeArea(edges: .bottom)
-            .navigationTitle(navTitle)
+            .navigationTitle(navigationBarTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -667,7 +649,7 @@ struct FullRouteMapView: View {
     }
 }
 
- //MapStop (kept for compatibility with existing code references)
+// Kept for compatibility with any existing code that references MapStop directly
 struct MapStop: Identifiable {
     let id: String
     let name: String

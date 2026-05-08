@@ -142,9 +142,9 @@ final class DriverTripSimulationViewModel: ObservableObject {
             do {
                 let tripId = try await TripService.shared.startTrip(routeId: routeId, driverId: driverId, session: session)
                 firestoreTripId = tripId
-                print("🟢 [SimulationVM] Trip started in Firestore id: \(tripId)")
+                print(" [SimulationVM] Trip started in Firestore id: \(tripId)")
             } catch {
-                print("🔴 [SimulationVM] Firestore startTrip error: \(error.localizedDescription)")
+                print(" [SimulationVM] Firestore startTrip error: \(error.localizedDescription)")
             }
 
             NotificationManager.shared.scheduleNotification(
@@ -178,7 +178,7 @@ final class DriverTripSimulationViewModel: ObservableObject {
                 // Drop the first point on legs after the first to avoid duplicating the junction stop
                 if legIndex > 0 { legCoordinates = Array(legCoordinates.dropFirst()) }
                 assembledPathCoordinates.append(contentsOf: legCoordinates)
-                print("🟢 [SimulationVM] Leg \(legIndex) road route: \(legCoordinates.count) points")
+                print(" [SimulationVM] Leg \(legIndex) road route: \(legCoordinates.count) points")
             } else {
                 // Fallback: linear interpolation if MKDirections fails for this leg
                 let fallbackPoints = linearInterpolatedCoordinates(
@@ -188,7 +188,7 @@ final class DriverTripSimulationViewModel: ObservableObject {
                 )
                 let pointsToAdd = legIndex > 0 ? Array(fallbackPoints.dropFirst()) : fallbackPoints
                 assembledPathCoordinates.append(contentsOf: pointsToAdd)
-                print("🟡 [SimulationVM] Leg \(legIndex) using linear fallback")
+                print("[SimulationVM] Leg \(legIndex) using linear fallback")
             }
 
             assembledStopArrivalIndices.append(assembledPathCoordinates.count - 1)
@@ -197,7 +197,7 @@ final class DriverTripSimulationViewModel: ObservableObject {
         fullRoadPathCoordinates = assembledPathCoordinates
         stopArrivalPathIndices = assembledStopArrivalIndices
         roadPolylineCoordinates = assembledPathCoordinates
-        print("🟢 [SimulationVM] Full road path: \(assembledPathCoordinates.count) total coordinates")
+        print(" [SimulationVM] Full road path: \(assembledPathCoordinates.count) total coordinates")
     }
 
     private func linearInterpolatedCoordinates(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D, stepCount: Int) -> [CLLocationCoordinate2D] {
@@ -307,9 +307,9 @@ final class DriverTripSimulationViewModel: ObservableObject {
             Task {
                 do {
                     try await TripService.shared.finishTrip(tripId: tripId)
-                    print("🟢 [SimulationVM] Trip finished in Firestore")
+                    print(" [SimulationVM] Trip finished in Firestore")
                 } catch {
-                    print("🔴 [SimulationVM] finishTrip error: \(error.localizedDescription)")
+                    print(" [SimulationVM] finishTrip error: \(error.localizedDescription)")
                 }
             }
         }
@@ -321,7 +321,7 @@ final class DriverTripSimulationViewModel: ObservableObject {
             do {
                 try await TripService.shared.saveTripHistoryRecord(builtTripRecord)
             } catch {
-                print("🔴 [SimulationVM] Failed to save trip history: \(error.localizedDescription)")
+                print(" [SimulationVM] Failed to save trip history: \(error.localizedDescription)")
             }
         }
         NotificationManager.shared.scheduleNotification(

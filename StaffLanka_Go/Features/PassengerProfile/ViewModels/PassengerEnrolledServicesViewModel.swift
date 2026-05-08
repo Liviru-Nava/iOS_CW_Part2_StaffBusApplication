@@ -28,7 +28,8 @@ struct EnrolledSessionInfo {
 }
 
 struct EnrolledService: Identifiable {
-    let id: String            // Firestore joinRequest document ID
+    let id: String
+    let routeId: String
     let routeName: String
     let routeStart: String
     let routeEnd: String
@@ -108,17 +109,31 @@ final class PassengerEnrolledServicesViewModel: ObservableObject {
     }
 
     func handleCancel() {
-        guard let service = serviceToCancel else { return }
+        guard let serviceBeingCancelled = serviceToCancel else { return }
+        let sessionBeingCancelled = sessionToCancel      // capture before state is cleared
+
         Task {
             do {
-                try await JoinRequestService.shared.cancelEnrollment(requestId: service.id)
-                print("🟢 [EnrolledServicesVM] Cancelled enrollment \(service.id)")
-                // Listener will automatically update both lists
+                try await JoinRequestService.shared.cancelEnrollment(requestId: serviceBeingCancelled.id)
+
+                // determine which session label to remove
+                let calendarSessionLabel: String
+                switch sessionBeingCancelled {
+                case .morning: calendarSessionLabel = "Morning"
+                case .evening: calendarSessionLabel = "Evening"
+                default:       calendarSessionLabel = "Both"
+                }
+
+                EventKitManager.shared.removeCalendarEventsForRoute(
+                    routeId: serviceBeingCancelled.routeId,
+                    sessionLabel: calendarSessionLabel
+                )
+
             } catch {
-                print("🔴 [EnrolledServicesVM] Cancel failed: \(error.localizedDescription)")
                 loadError = "Could not cancel enrollment. Please try again."
             }
         }
+
         serviceToCancel = nil
         sessionToCancel = nil
         showCancelAlert = false
@@ -126,10 +141,9 @@ final class PassengerEnrolledServicesViewModel: ObservableObject {
     }
 
     // Firebase loading
-
     func startListening() {
         guard let passengerId = Auth.auth().currentUser?.uid else {
-            print("🔴 [EnrolledServicesVM] No authenticated user — cannot load enrollments")
+            print("[EnrolledServicesVM] No authenticated user — cannot load enrollments")
             return
         }
         isLoading = true
@@ -159,6 +173,7 @@ final class PassengerEnrolledServicesViewModel: ObservableObject {
                 var pastService = service
                 pastService = EnrolledService(
                     id: service.id,
+                    routeId: service.routeId,
                     routeName: service.routeName,
                     routeStart: service.routeStart,
                     routeEnd: service.routeEnd,
@@ -176,13 +191,13 @@ final class PassengerEnrolledServicesViewModel: ObservableObject {
         self.activeServices = active
         self.pastServices   = past.sorted { ($0.cancelledDate ?? .distantPast) > ($1.cancelledDate ?? .distantPast) }
         self.isLoading = false
-        print("🟢 [EnrolledServicesVM] Updated — \(active.count) active, \(past.count) past")
+        print("[EnrolledServicesVM] Updated — \(active.count) active, \(past.count) past")
     }
 
     private func buildEnrolledService(from req: JoinRequestModel, docId: String) async -> EnrolledService? {
         // Fetch route
         guard let route = try? await RouteService.shared.fetchRoute(routeId: req.routeId) else {
-            print("🔴 [EnrolledServicesVM] Could not fetch route \(req.routeId)")
+            print("[EnrolledServicesVM] Could not fetch route \(req.routeId)")
             return nil
         }
 
@@ -243,6 +258,7 @@ final class PassengerEnrolledServicesViewModel: ObservableObject {
 
         return EnrolledService(
             id:         docId,
+            routeId: req.routeId,
             routeName:  "\(route.startLocation.locationName) → \(route.endLocation.locationName)",
             routeStart: req.pickupStop,
             routeEnd:   req.dropoffStop,
