@@ -22,11 +22,7 @@ struct TripSessionRecord: Identifiable {
     let pickupStop: String
     let dropoffStop: String
     let attendance: TripAttendanceStatus
-
-    var duration: Int? {
-        guard let boardTime = boardTime, let departTime = departureTime else { return nil }
-        return Int(departTime.timeIntervalSince(boardTime) / 60)
-    }
+    let duration: Int?
 }
 
 struct TripDayRecord: Identifiable {
@@ -46,11 +42,103 @@ enum TripHistoryDateFilter: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+import FirebaseAuth
+import FirebaseFirestore
+
 @MainActor
 final class PassengerTripHistoryViewModel: ObservableObject {
-    @Published var records: [TripDayRecord] = TripDayRecord.mockHistory
+    @Published var records: [TripDayRecord] = []
     @Published var selectedDateFilter: TripHistoryDateFilter = .last30Days
     @Published var selectedRecord: TripDayRecord? = nil
+
+    func fetchHistory() {
+        guard let passengerId = FirebaseAuth.Auth.auth().currentUser?.uid else { return }
+        
+        Task {
+            do {
+                // 1. Get passenger's join requests
+                let snapshot = try await Firestore.firestore().collection("joinRequests")
+                    .whereField("passengerId", isEqualTo: passengerId)
+                    .whereField("status", isEqualTo: "accepted")
+                    .getDocuments()
+                let joinRequests = snapshot.documents.compactMap { try? $0.data(as: JoinRequestModel.self) }
+                
+                // 2. Fetch history for those routes
+                var allHistories: [DriverHistoryTripRecord] = []
+                for req in joinRequests {
+                    let routeHistory = try await TripService.shared.fetchPassengerTripHistory(routeId: req.routeId)
+                    allHistories.append(contentsOf: routeHistory)
+                }
+                
+                // 3. Fetch all attendance for this passenger
+                let attSnapshot = try await Firestore.firestore().collection("attendance")
+                    .whereField("passengerId", isEqualTo: passengerId)
+                    .getDocuments()
+                let attendances = attSnapshot.documents.compactMap { try? $0.data(as: AttendanceModel.self) }
+                
+                // 4. Group by Date
+                let groupedByDate = Dictionary(grouping: allHistories) { Calendar.current.startOfDay(for: $0.tripDate) }
+                
+                var builtRecords: [TripDayRecord] = []
+                
+                for (date, trips) in groupedByDate {
+                    let morningTrip = trips.first { $0.sessionType == "Morning" }
+                    let eveningTrip = trips.first { $0.sessionType == "Evening" }
+                    
+                    var morningSession: TripSessionRecord? = nil
+                    if let mt = morningTrip {
+                        // find join request for this route
+                        let req = joinRequests.first { $0.routeId == mt.routeId }
+                        let routeName = "Route" // Could fetch actual route name, simplify for now
+                        
+                        // find attendance
+                        let att = attendances.first { $0.routeId == mt.routeId && $0.session == "Morning" && Calendar.current.startOfDay(for: $0.tripDate) == date }
+                        let status: TripAttendanceStatus = (att?.status == "attending") ? .attended : .skipped
+                        
+                        morningSession = TripSessionRecord(
+                            id: UUID(), session: .morning,
+                            boardTime: mt.tripDate, departureTime: mt.tripDate.addingTimeInterval(TimeInterval(mt.performanceSummary.tripDurationInMinutes * 60)),
+                            pickupStop: req?.pickupStop ?? "", dropoffStop: req?.dropoffStop ?? "",
+                            attendance: status, duration: status == .attended ? mt.performanceSummary.tripDurationInMinutes : nil
+                        )
+                    }
+                    
+                    var eveningSession: TripSessionRecord? = nil
+                    if let et = eveningTrip {
+                        let req = joinRequests.first { $0.routeId == et.routeId }
+                        let att = attendances.first { $0.routeId == et.routeId && $0.session == "Evening" && Calendar.current.startOfDay(for: $0.tripDate) == date }
+                        let status: TripAttendanceStatus = (att?.status == "attending") ? .attended : .skipped
+                        
+                        eveningSession = TripSessionRecord(
+                            id: UUID(), session: .evening,
+                            boardTime: et.tripDate, departureTime: et.tripDate.addingTimeInterval(TimeInterval(et.performanceSummary.tripDurationInMinutes * 60)),
+                            pickupStop: req?.dropoffStop ?? "", dropoffStop: req?.pickupStop ?? "", // reversed for evening
+                            attendance: status, duration: status == .attended ? et.performanceSummary.tripDurationInMinutes : nil
+                        )
+                    }
+                    
+                    // Assign a route name based on what's available
+                    let anyTrip = morningTrip ?? eveningTrip
+                    var finalRouteName = "Bus Route"
+                    if let reqRouteId = anyTrip?.routeId {
+                        if let route = try? await RouteService.shared.fetchRoute(routeId: reqRouteId) {
+                            finalRouteName = "\(route.startName ?? route.startLocation.locationName) - \(route.endName ?? route.endLocation.locationName)"
+                        }
+                    }
+                    
+                    builtRecords.append(TripDayRecord(
+                        id: UUID(), date: date, routeName: finalRouteName, serviceSession: .both,
+                        morning: morningSession, evening: eveningSession
+                    ))
+                }
+                
+                self.records = builtRecords.sorted { $0.date > $1.date }
+                
+            } catch {
+                print("🔴 Failed to fetch passenger history: \(error)")
+            }
+        }
+    }
 
     var filteredRecords: [TripDayRecord] {
         let now = Date()
@@ -102,10 +190,20 @@ final class PassengerTripHistoryViewModel: ObservableObject {
         }
     }
 
-    var attendanceRate: Int {
-        let total = totalTripsAttended + totalTripsSkipped
-        guard total > 0 else { return 0 }
-        return Int((Double(totalTripsAttended) / Double(total)) * 100)
+    var averageTravelTime: Int {
+        var totalDurations = 0
+        var totalTrips = 0
+        for r in filteredRecords {
+            if r.morning?.attendance == .attended, let dur = r.morning?.duration {
+                totalDurations += dur
+                totalTrips += 1
+            }
+            if r.evening?.attendance == .attended, let dur = r.evening?.duration {
+                totalDurations += dur
+                totalTrips += 1
+            }
+        }
+        return totalTrips > 0 ? totalDurations / totalTrips : 0
     }
 }
 
@@ -130,7 +228,8 @@ extension TripDayRecord {
                 departureTime: attended ? makeDate(daysBack: daysBack, hour: 7,  minute: 55) : nil,
                 pickupStop:  "Kadawatha Junction",
                 dropoffStop: "Colombo Fort",
-                attendance: attended ? .attended : .skipped
+                attendance: attended ? .attended : .skipped,
+                duration: attended ? 80 : nil
             )
         }
 
@@ -142,7 +241,8 @@ extension TripDayRecord {
                 departureTime: attended ? makeDate(daysBack: daysBack, hour: 18, minute: 40) : nil,
                 pickupStop:  "Colombo Fort",
                 dropoffStop: "Kadawatha Junction",
-                attendance: attended ? .attended : .skipped
+                attendance: attended ? .attended : .skipped,
+                duration: attended ? 85 : nil
             )
         }
 

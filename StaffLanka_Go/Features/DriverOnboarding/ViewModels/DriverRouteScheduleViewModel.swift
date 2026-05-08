@@ -9,6 +9,8 @@ import Foundation
 import SwiftUI
 import Combine
 import MapKit
+import FirebaseAuth
+import FirebaseFirestore
 
 
 struct MapSearchResult: Identifiable {
@@ -71,6 +73,23 @@ enum DayOfWeek: String, CaseIterable, Identifiable {
 @MainActor
 final class DriverRouteScheduleViewModel: ObservableObject {
 
+    private let upstreamPersonalInfoViewModel: DriverPersonalInfoViewModel
+    private let upstreamBusInfoViewModel: DriverBusInfoViewModel
+
+    init(
+        personalInfoViewModel: DriverPersonalInfoViewModel? = nil,
+        busInfoViewModel: DriverBusInfoViewModel? = nil
+    ) {
+        self.upstreamPersonalInfoViewModel = personalInfoViewModel ?? DriverPersonalInfoViewModel()
+        self.upstreamBusInfoViewModel = busInfoViewModel ?? DriverBusInfoViewModel()
+    }
+
+    @Published var morningPrice: String = ""
+    @Published var eveningPrice: String = ""
+    @Published var bothTripsPrice: String = ""
+
+    @Published var submissionErrorMessage: String? = nil
+
     @Published var startingPoint: String = ""
     @Published var endingPoint: String = ""
     @Published var startCoordinate: CLLocationCoordinate2D? = nil
@@ -110,8 +129,22 @@ final class DriverRouteScheduleViewModel: ObservableObject {
         !endingPoint.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
+    var isPricingValid: Bool {
+        guard let morning = Double(morningPrice),
+              let evening = Double(eveningPrice),
+              let both = Double(bothTripsPrice) else {
+            return false
+        }
+        
+        let isValidRange = { (price: Double) -> Bool in
+            price >= 5000 && price <= 15000
+        }
+        
+        return isValidRange(morning) && isValidRange(evening) && isValidRange(both) && (both < (morning + evening))
+    }
+
     var canSubmit: Bool {
-        isRouteValid && !selectedDays.isEmpty
+        isRouteValid && !selectedDays.isEmpty && isPricingValid
     }
 
     var orderedStops: [RouteStop] {
@@ -333,9 +366,98 @@ final class DriverRouteScheduleViewModel: ObservableObject {
 
     func submitOnboarding() async {
         guard canSubmit else { return }
+        guard let authenticatedUserId = Auth.auth().currentUser?.uid else {
+            submissionErrorMessage = "You must be signed in to complete registration."
+            return
+        }
+
         isSubmitting = true
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
-        isSubmitting = false
-        onboardingComplete = true
+        submissionErrorMessage = nil
+
+        do {
+            let routeStopDataList: [RouteStopData] = orderedStops.enumerated().map { stopIndex, routeStop in
+                RouteStopData(
+                    stopName: routeStop.name,
+                    latitude: routeStop.coordinate?.latitude ?? 0.0,
+                    longitude: routeStop.coordinate?.longitude ?? 0.0,
+                    stopOrder: stopIndex
+                )
+            }
+
+            let morningScheduleEntry = RouteScheduleData(
+                scheduledDepartureTime: morningTrip.departureTime,
+                scheduledArrivalTime: morningTrip.estimatedArrivalTime,
+                activeDays: selectedDays.map { $0.rawValue }
+            )
+            let eveningScheduleEntry = RouteScheduleData(
+                scheduledDepartureTime: eveningTrip.departureTime,
+                scheduledArrivalTime: eveningTrip.estimatedArrivalTime,
+                activeDays: selectedDays.map { $0.rawValue }
+            )
+
+            let mPrice = Double(morningPrice) ?? 0.0
+            let ePrice = Double(eveningPrice) ?? 0.0
+            let bPrice = Double(bothTripsPrice) ?? 0.0
+
+            let newRouteRecord = RouteModel(
+                id: nil,
+                ownerDriverId: authenticatedUserId,
+                startLocation: RouteLocationData(
+                    locationName: startingPoint,
+                    latitude: startCoordinate?.latitude ?? 0.0,
+                    longitude: startCoordinate?.longitude ?? 0.0
+                ),
+                endLocation: RouteLocationData(
+                    locationName: endingPoint,
+                    latitude: endCoordinate?.latitude ?? 0.0,
+                    longitude: endCoordinate?.longitude ?? 0.0
+                ),
+                routeStops: routeStopDataList,
+                scheduleEntries: [morningScheduleEntry, eveningScheduleEntry],
+                morningPrice: mPrice,
+                eveningPrice: ePrice,
+                bothTripsPrice: bPrice,
+                pricePerTrip: nil,
+                routeCreatedAt: Date(),
+                startName: startingPoint,
+                endName: endingPoint
+            )
+
+
+            let createdRouteId = try await RouteService.shared.createRoute(routeRecord: newRouteRecord)
+
+            let busInfoForDriver = DriverBusInfo(
+                plateNumber: upstreamBusInfoViewModel.plateNumber,
+                busName: upstreamBusInfoViewModel.busName,
+                busType: upstreamBusInfoViewModel.busType.rawValue,
+                passengerCapacity: Int(upstreamBusInfoViewModel.capacity) ?? 0
+            )
+
+            let newDriverRecord = DriverModel(
+                id: authenticatedUserId,
+                fullName: upstreamPersonalInfoViewModel.fullName,
+                licenseNumber: upstreamPersonalInfoViewModel.licenseNumber,
+                busInformation: busInfoForDriver,
+                assignedRouteId: createdRouteId,
+                driverCreatedAt: Date()
+            )
+
+            try await DriverService.shared.createDriver(driverRecord: newDriverRecord)
+
+            try await UserService.shared.updateUserRoleAndName(
+                userId: authenticatedUserId,
+                updatedRole: "driver",
+                fullName: upstreamPersonalInfoViewModel.fullName
+            )
+
+            await AuthManager.shared.refreshUserRoleFromFirestore(userId: authenticatedUserId)
+
+            isSubmitting = false
+            onboardingComplete = true
+
+        } catch {
+            submissionErrorMessage = error.localizedDescription
+            isSubmitting = false
+        }
     }
 }

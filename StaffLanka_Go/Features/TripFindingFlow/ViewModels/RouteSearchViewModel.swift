@@ -8,38 +8,16 @@
 import Foundation
 import CoreLocation
 import Combine
+import FirebaseFirestore
+import FirebaseAuth
 
 struct PredefinedLocation: Identifiable, Hashable {
     let id = UUID()
     let name: String
     let area: String
-    let coordinate: CLLocationCoordinate2D
 
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
     static func == (lhs: PredefinedLocation, rhs: PredefinedLocation) -> Bool { lhs.id == rhs.id }
-}
-
-struct BusRoute: Identifiable {
-    let id = UUID()
-    let busNumber: String
-    let routeName: String
-    let origin: String
-    let destination: String
-    let driverName: String
-    let driverPhone: String
-    let vehicleBrand: String
-    let vehicleType: String
-    let capacity: Int
-    let currentPassengers: Int
-    let rating: Double
-    let morningStartTime: String
-    let morningEndTime: String
-    let eveningStartTime: String
-    let eveningEndTime: String
-    let estimatedMonthlyCost: Double
-    let stops: [String]
-
-    var availableSeats: Int { capacity - currentPassengers }
 }
 
 enum ActiveSearchField {
@@ -55,112 +33,142 @@ final class RouteSearchViewModel: ObservableObject {
     @Published var destinationLocation: PredefinedLocation? = nil
     @Published var activeField: ActiveSearchField = .pickup
     @Published var isUsingCurrentLocationForPickup: Bool = false
-    @Published var matchedRoutes: [BusRoute] = []
+
+    @Published var matchedRoutes: [PassengerRouteResult] = []
     @Published var isSearching: Bool = false
     @Published var showSuggestions: Bool = false
+    @Published var searchError: String? = nil
 
-    private let proximityThresholdMeters: Double = 2000
+    @Published var availableLocations: [PredefinedLocation] = []
+    @Published var isLoadingLocations: Bool = false
 
-    //added a few locations for UI view
-    let predefinedLocations: [PredefinedLocation] = [
-        PredefinedLocation(name: "Colombo Fort", area: "Colombo 01", coordinate: CLLocationCoordinate2D(latitude: 6.9344, longitude: 79.8428)),
-        PredefinedLocation(name: "Pettah Bus Stand", area: "Colombo 11", coordinate: CLLocationCoordinate2D(latitude: 6.9355, longitude: 79.8503)),
-        PredefinedLocation(name: "Maradana", area: "Colombo 10", coordinate: CLLocationCoordinate2D(latitude: 6.9271, longitude: 79.8612)),
-        PredefinedLocation(name: "Borella", area: "Colombo 08", coordinate: CLLocationCoordinate2D(latitude: 6.9147, longitude: 79.8774)),
-        PredefinedLocation(name: "Nugegoda", area: "Colombo 10", coordinate: CLLocationCoordinate2D(latitude: 6.8728, longitude: 79.8889)),
-        PredefinedLocation(name: "Maharagama", area: "Western Province", coordinate: CLLocationCoordinate2D(latitude: 6.8484, longitude: 79.9266)),
-        PredefinedLocation(name: "Battaramulla", area: "Western Province", coordinate: CLLocationCoordinate2D(latitude: 6.9046, longitude: 79.9196)),
-        PredefinedLocation(name: "Rajagiriya", area: "Western Province", coordinate: CLLocationCoordinate2D(latitude: 6.9050, longitude: 79.8960)),
-        PredefinedLocation(name: "Kottawa", area: "Western Province", coordinate: CLLocationCoordinate2D(latitude: 6.8380, longitude: 79.9680)),
-        PredefinedLocation(name: "Kaduwela", area: "Western Province", coordinate: CLLocationCoordinate2D(latitude: 6.9284, longitude: 79.9803)),
-        PredefinedLocation(name: "Malabe", area: "Western Province", coordinate: CLLocationCoordinate2D(latitude: 6.9063, longitude: 79.9726)),
-        PredefinedLocation(name: "Athurugiriya", area: "Western Province", coordinate: CLLocationCoordinate2D(latitude: 6.8787, longitude: 79.9913)),
-    ]
+    init() {
+        Task { await loadAvailableLocations() }
+    }
 
-    //added a few routes for ui view
-    private let allRoutes: [BusRoute] = [
-        BusRoute(
-            busNumber: "SL-B 1384",
-            routeName: "Colombo Fort → Maharagama",
-            origin: "Colombo Fort",
-            destination: "Maharagama",
-            driverName: "K. Perera",
-            driverPhone: "+94 77 111 2222",
-            vehicleBrand: "Ashok Leyland",
-            vehicleType: "Bus",
-            capacity: 40,
-            currentPassengers: 32,
-            rating: 4.3,
-            morningStartTime: "06:30 AM",
-            morningEndTime: "07:45 AM",
-            eveningStartTime: "05:30 PM",
-            eveningEndTime: "06:45 PM",
-            estimatedMonthlyCost: 3500,
-            stops: ["Colombo Fort", "Pettah Bus Stand", "Maradana", "Borella", "Nugegoda", "Maharagama"]
-        ),
-        BusRoute(
-            busNumber: "SL-B 1540",
-            routeName: "Colombo Fort → Malabe",
-            origin: "Colombo Fort",
-            destination: "Malabe",
-            driverName: "S. Fernando",
-            driverPhone: "+94 77 333 4444",
-            vehicleBrand: "Toyota",
-            vehicleType: "Van",
-            capacity: 14,
-            currentPassengers: 0,
-            rating: 4.7,
-            morningStartTime: "06:45 AM",
-            morningEndTime: "08:00 AM",
-            eveningStartTime: "05:45 PM",
-            eveningEndTime: "07:00 PM",
-            estimatedMonthlyCost: 4200,
-            stops: ["Colombo Fort", "Pettah Bus Stand", "Rajagiriya", "Battaramulla", "Malabe"]
-        ),
-        BusRoute(
-            busNumber: "SL-B 1760",
-            routeName: "Nugegoda → Kaduwela",
-            origin: "Nugegoda",
-            destination: "Kaduwela",
-            driverName: "R. Jayasinghe",
-            driverPhone: "+94 77 555 6666",
-            vehicleBrand: "Mitsubishi",
-            vehicleType: "Van",
-            capacity: 12,
-            currentPassengers: 7,
-            rating: 4.1,
-            morningStartTime: "07:00 AM",
-            morningEndTime: "08:30 AM",
-            eveningStartTime: "06:00 PM",
-            eveningEndTime: "07:30 PM",
-            estimatedMonthlyCost: 3800,
-            stops: ["Nugegoda", "Rajagiriya", "Battaramulla", "Kaduwela"]
-        ),
-        BusRoute(
-            busNumber: "SL-B 1920",
-            routeName: "Colombo Fort → Athurugiriya",
-            origin: "Colombo Fort",
-            destination: "Athurugiriya",
-            driverName: "T. Silva",
-            driverPhone: "+94 77 777 8888",
-            vehicleBrand: "Ashok Leyland",
-            vehicleType: "Bus",
-            capacity: 50,
-            currentPassengers: 30,
-            rating: 4.5,
-            morningStartTime: "07:15 AM",
-            morningEndTime: "08:50 AM",
-            eveningStartTime: "06:15 PM",
-            eveningEndTime: "07:50 PM",
-            estimatedMonthlyCost: 4500,
-            stops: ["Colombo Fort", "Maradana", "Borella", "Rajagiriya", "Malabe", "Athurugiriya"]
-        ),
-    ]
+    func loadAvailableLocations() async {
+        let currentUserId = Auth.auth().currentUser?.uid ?? "NOT_AUTHENTICATED"
+        print("[INFO] [RouteSearch] loadAvailableLocations — currentUserId: \(currentUserId)")
+
+        isLoadingLocations = true
+        do {
+            let routes = try await RouteService.shared.fetchAllRoutes()
+            print("[SUCCESS] [RouteSearch] Fetched \(routes.count) route(s) from Firestore")
+
+            var nameSet = Set<String>()
+            var locations: [PredefinedLocation] = []
+            for route in routes {
+                let startName = route.startLocation.locationName
+                let endName   = route.endLocation.locationName
+                print("[INFO] Route \(route.id ?? "NO_ID"): '\(startName)' -> '\(endName)' | driverId: \(route.ownerDriverId)")
+
+                if !startName.isEmpty, nameSet.insert(startName).inserted {
+                    locations.append(PredefinedLocation(name: startName, area: "Route Start"))
+                }
+                if !endName.isEmpty, nameSet.insert(endName).inserted {
+                    locations.append(PredefinedLocation(name: endName, area: "Route End"))
+                }
+                // Also expose intermediate stop names so a passenger can search by stop
+                for stop in route.routeStops where !stop.stopName.isEmpty {
+                    if nameSet.insert(stop.stopName).inserted {
+                        locations.append(PredefinedLocation(name: stop.stopName, area: "Route Stop"))
+                    }
+                }
+            }
+            self.availableLocations = locations.sorted { $0.name < $1.name }
+            print("[SUCCESS] [RouteSearch] \(locations.count) unique location(s) loaded for picker: \(locations.map { $0.name })")
+        } catch {
+            print("[ERROR] [RouteSearch] loadAvailableLocations FAILED: \(error.localizedDescription)")
+        }
+        isLoadingLocations = false
+    }
+
+    private func loadRoutes() {
+        guard let pickup = pickupLocation, let destination = destinationLocation else { return }
+
+        print("\n[INFO] [RouteSearch] loadRoutes — pickup: '\(pickup.name)' -> destination: '\(destination.name)'")
+
+        isSearching = true
+        searchError = nil
+        matchedRoutes = []
+
+        Task {
+            do {
+                let allRoutes = try await RouteService.shared.fetchAllRoutes()
+                print("[SUCCESS] [RouteSearch] Total routes in Firestore: \(allRoutes.count)")
+
+                let matchingRoutes = allRoutes.filter { route in
+                    var sequence: [String] = []
+                    sequence.append(route.startLocation.locationName.localizedCaseInsensitiveCompare(pickup.name) == .orderedSame ? pickup.name.lowercased() : route.startLocation.locationName.lowercased())
+                    
+                    let sortedStops = route.routeStops.sorted { $0.stopOrder < $1.stopOrder }
+                    sequence.append(contentsOf: sortedStops.map { $0.stopName.lowercased() })
+                    
+                    sequence.append(route.endLocation.locationName.localizedCaseInsensitiveCompare(destination.name) == .orderedSame ? destination.name.lowercased() : route.endLocation.locationName.lowercased())
+                    
+                    let pQuery = pickup.name.lowercased()
+                    let dQuery = destination.name.lowercased()
+                    
+                    if let pIndex = sequence.firstIndex(of: pQuery), let dIndex = sequence.lastIndex(of: dQuery) {
+                        return pIndex < dIndex // Must be traveling in the correct direction
+                    }
+                    return false
+                }
+                print("[WARNING] [RouteSearch] Matching routes after filter: \(matchingRoutes.count)")
+
+                var results: [PassengerRouteResult] = []
+
+                for route in matchingRoutes {
+                    let routeId = route.id ?? "NO_ID"
+                    print("\n[INFO] [RouteSearch] Processing route \(routeId) | driverId: \(route.ownerDriverId)")
+
+                    guard route.isAcceptable else {
+                        print("[WARNING] [RouteSearch] Route \(routeId) skipped — only \(route.scheduleEntries.count) schedule entry(ies), need >= 2")
+                        continue
+                    }
+
+                    do {
+                        print("[INFO] [RouteSearch] Fetching driver document: drivers/\(route.ownerDriverId)")
+                        let driver = try await DriverService.shared.fetchDriver(driverId: route.ownerDriverId)
+                        print("[SUCCESS] [RouteSearch] Driver fetched: '\(driver.fullName)' | bus: '\(driver.busInformation.busName)' | plate: '\(driver.busInformation.plateNumber)'")
+                        
+                        guard driver.isAcceptingRequests == true else {
+                            print("[WARNING] [RouteSearch] Driver \(driver.fullName) is not accepting requests, skipping.")
+                            continue
+                        }
+
+                        if let result = PassengerRouteResult.build(from: route, driver: driver) {
+                            print("[SUCCESS] [RouteSearch] PassengerRouteResult built successfully for route \(routeId)")
+                            results.append(result)
+                        } else {
+                            print("[ERROR] [RouteSearch] PassengerRouteResult.build() returned nil for route \(routeId)")
+                        }
+                    } catch {
+                        print("[ERROR] [RouteSearch] Driver fetch FAILED for \(route.ownerDriverId): \(error.localizedDescription)")
+                        print("[WARNING] [RouteSearch] Building partial result from route data only (no driver info)")
+
+                        if let partialResult = PassengerRouteResult.buildPartial(from: route) {
+                            results.append(partialResult)
+                            print("[INFO] [RouteSearch] Partial PassengerRouteResult added for route \(routeId)")
+                        }
+                    }
+                }
+
+                self.matchedRoutes = results
+                print("\n[SUCCESS] [RouteSearch] Final matched results: \(results.count) route card(s) to display")
+
+            } catch {
+                self.searchError = "Could not load routes. Please try again."
+                print("[ERROR] [RouteSearch] loadRoutes FAILED (outer): \(error.localizedDescription)")
+            }
+            self.isSearching = false
+        }
+    }
 
     var activeSuggestions: [PredefinedLocation] {
         let query = activeField == .pickup ? pickupText : destinationText
         guard !query.isEmpty else { return [] }
-        return predefinedLocations.filter {
+        return availableLocations.filter {
             $0.name.localizedCaseInsensitiveContains(query) ||
             $0.area.localizedCaseInsensitiveContains(query)
         }
@@ -170,19 +178,8 @@ final class RouteSearchViewModel: ObservableObject {
         pickupLocation != nil && destinationLocation != nil
     }
 
-    func closestLocation(to coordinate: CLLocationCoordinate2D) -> PredefinedLocation? {
-        let userLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-        return predefinedLocations
-            .map { loc -> (PredefinedLocation, Double) in
-                let locCL = CLLocation(latitude: loc.coordinate.latitude, longitude: loc.coordinate.longitude)
-                return (loc, userLocation.distance(from: locCL))
-            }
-            .filter { $0.1 <= proximityThresholdMeters }
-            .min(by: { $0.1 < $1.1 })?
-            .0
-    }
-
     func selectLocation(_ location: PredefinedLocation) {
+        print("[INFO] [RouteSearch] selectLocation '\(location.name)' for field: \(activeField == .pickup ? "pickup" : "destination")")
         if activeField == .pickup {
             pickupLocation = location
             pickupText = location.name
@@ -204,52 +201,19 @@ final class RouteSearchViewModel: ObservableObject {
         }
     }
 
-    func useCurrentLocationForPickup(coordinate: CLLocationCoordinate2D) {
-        if let closest = closestLocation(to: coordinate) {
-            pickupLocation = closest
-            pickupText = closest.name
-            isUsingCurrentLocationForPickup = true
-            activeField = .destination
-            showSuggestions = false
-            if destinationLocation != nil {
-                loadRoutes()
-            }
-        }
-    }
-
-    func useCurrentLocationForPickupMocked() {
-        let sampleCoordinate = CLLocationCoordinate2D(latitude: 6.9050, longitude: 79.8960)
-        useCurrentLocationForPickup(coordinate: sampleCoordinate)
-    }
-
-    func useCurrentLocationForDestination(coordinate: CLLocationCoordinate2D) {
-        if let closest = closestLocation(to: coordinate) {
-            destinationLocation = closest
-            destinationText = closest.name
-            activeField = .destination
-            showSuggestions = false
-            if pickupLocation != nil {
-                loadRoutes()
-            }
-        }
-    }
-
-    func useCurrentLocationForDestinationMocked() {
-        let sampleCoordinate = CLLocationCoordinate2D(latitude: 6.8484, longitude: 79.9266)
-        useCurrentLocationForDestination(coordinate: sampleCoordinate)
-    }
-
     func clearPickup() {
         pickupLocation = nil
         pickupText = ""
         isUsingCurrentLocationForPickup = false
         matchedRoutes = []
+        searchError = nil
     }
 
     func clearDestination() {
         destinationLocation = nil
         destinationText = ""
         matchedRoutes = []
+        searchError = nil
     }
 
     func swapLocations() {
@@ -262,21 +226,10 @@ final class RouteSearchViewModel: ObservableObject {
         isUsingCurrentLocationForPickup = false
         if bothLocationsSelected { loadRoutes() }
     }
+}
 
-    private func loadRoutes() {
-        guard let pickup = pickupLocation, let destination = destinationLocation else { return }
-        isSearching = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-            guard let self else { return }
-            self.matchedRoutes = self.allRoutes.filter { route in
-                let pickupIndex = route.stops.firstIndex(of: pickup.name)
-                let destinationIndex = route.stops.firstIndex(of: destination.name)
-                if let pi = pickupIndex, let di = destinationIndex {
-                    return pi < di
-                }
-                return false
-            }
-            self.isSearching = false
-        }
+private extension RouteModel {
+    var isAcceptable: Bool {
+        scheduleEntries.count >= 2
     }
 }

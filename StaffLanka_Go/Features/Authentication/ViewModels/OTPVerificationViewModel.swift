@@ -5,10 +5,11 @@
 //  Created by Liviru Navaratna on 2026-04-01.
 //
 
-
 import Foundation
 import Combine
 import SwiftUI
+import FirebaseAuth
+import FirebaseFirestore
 
 enum OTPVerificationState: Equatable {
     case idle
@@ -19,74 +20,167 @@ enum OTPVerificationState: Equatable {
 
 @MainActor
 final class OTPVerificationViewModel: ObservableObject {
+
     let phoneNumber: String
+
+    @Published var otpDigits: [String] = Array(repeating: "", count: 6)
+    @Published var verificationState: OTPVerificationState = .idle
+    @Published var secondsRemainingForResend: Int = 30
+    @Published var shakeAnimationOffset: CGFloat = 0
+    @Published var shouldPromptBiometricEnrollment: Bool = false
+    @Published var isBiometricEnrolling: Bool = false
+
+    private var resendCountdownTask: Task<Void, Never>?
+    private var authenticatedUserId: String = ""
 
     init(phoneNumber: String) {
         self.phoneNumber = phoneNumber
     }
 
-    @Published var otpDigits: [String] = Array(repeating: "", count: 6)
-    @Published var state: OTPVerificationState = .idle
-    @Published var secondsRemaining: Int = 30
-    @Published var shakeOffset: CGFloat = 0
-
-    private var countdownTask: Task<Void, Never>?
-
-    var enteredOTP: String {
+    var enteredOTPString: String {
         otpDigits.joined()
     }
 
-    var isComplete: Bool {
-        enteredOTP.count == 6
+    var isOTPComplete: Bool {
+        enteredOTPString.count == 6
     }
 
-    var canResend: Bool {
-        secondsRemaining == 0
+    var canResendOTP: Bool {
+        secondsRemainingForResend == 0
     }
 
-    func startCountdown() {
-        countdownTask?.cancel()
-        secondsRemaining = 30
-        countdownTask = Task {
-            while secondsRemaining > 0 {
+    func startResendCountdown() {
+        resendCountdownTask?.cancel()
+        secondsRemainingForResend = 30
+        resendCountdownTask = Task {
+            while secondsRemainingForResend > 0 {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 if Task.isCancelled { return }
-                secondsRemaining -= 1
+                secondsRemainingForResend -= 1
             }
         }
     }
 
     func resendOTP() {
         otpDigits = Array(repeating: "", count: 6)
-        state = .idle
-        startCountdown()
+        verificationState = .idle
+        startResendCountdown()
+        Task { await requestFreshOTPFromFirebase() }
     }
 
-    func verify() async {
-        guard isComplete, state != .verifying else { return }
-        state = .verifying
-        try? await Task.sleep(nanoseconds: 1_200_000_000)
-        if enteredOTP.count == 6 {
-            state = .success
-        } else {
-            state = .error("Invalid code. Please try again.")
-            await triggerShake()
+    private func requestFreshOTPFromFirebase() async {
+        do {
+            let freshVerificationID = try await PhoneAuthProvider.provider(auth: Auth.auth()).verifyPhoneNumber(
+                phoneNumber,
+                uiDelegate: nil
+            )
+            AuthManager.shared.storeFirebaseVerificationID(freshVerificationID)
+        } catch {
         }
     }
 
-    func handleAutoSubmit() async {
-        guard isComplete && state == .idle else { return }
-        await verify()
+    func verifyOTP() async {
+        guard isOTPComplete, verificationState != .verifying else { return }
+        guard let storedVerificationID = AuthManager.shared.retrieveStoredFirebaseVerificationID() else {
+            verificationState = .error("Session expired. Please request a new code.")
+            return
+        }
+        verificationState = .verifying
+        let phoneAuthCredential = PhoneAuthProvider.provider(auth: Auth.auth()).credential(
+            withVerificationID: storedVerificationID,
+            verificationCode: enteredOTPString
+        )
+        do {
+            let authDataResult = try await Auth.auth().signIn(with: phoneAuthCredential)
+            let resolvedUserId = authDataResult.user.uid
+            let resolvedPhoneNumber = authDataResult.user.phoneNumber ?? phoneNumber
+
+            authenticatedUserId = resolvedUserId
+
+            try await UserService.shared.createUserIfNeeded(
+                userId: resolvedUserId,
+                phoneNumber: resolvedPhoneNumber
+            )
+
+            AuthManager.shared.signIn(phoneNumber: resolvedPhoneNumber)
+
+            await fireWelcomeLoginNotificationForUser(userId: resolvedUserId)
+
+            if !AuthManager.shared.isBiometricEnabled
+                && BiometricService.shared.deviceSupportsBiometricAuthentication {
+                shouldPromptBiometricEnrollment = true
+            } else {
+                AuthManager.shared.completeSignIn()
+                verificationState = .success
+            }
+        } catch let firebaseError as NSError {
+            let userFacingErrorMessage = mapFirebaseOTPErrorToUserMessage(firebaseError)
+            verificationState = .error(userFacingErrorMessage)
+            await triggerShakeAnimation()
+        }
     }
 
-    private func triggerShake() async {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.3)) {
-            shakeOffset = 12
+    private func fireWelcomeLoginNotificationForUser(userId: String) async {
+        do {
+            let fetchedUserProfile = try await UserService.shared.fetchUser(userId: userId)
+            let resolvedDisplayName = fetchedUserProfile?.fullName ?? ""
+            NotificationManager.shared.sendWelcomeLoginNotification(
+                userDisplayName: resolvedDisplayName,
+                userId: userId
+            )
+        } catch {
+            NotificationManager.shared.sendWelcomeLoginNotification(
+                userDisplayName: "",
+                userId: userId
+            )
         }
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-            shakeOffset = 0
+    }
+
+    func enrollBiometric() {
+        isBiometricEnrolling = true
+        Task {
+            let biometricChallengeSucceeded = await BiometricService.shared.authenticateWithBiometrics(
+                reasonMessage: "Verify your identity to enable \(BiometricService.shared.biometricTypeDisplayName)"
+            )
+            isBiometricEnrolling = false
+            if biometricChallengeSucceeded {
+                AuthManager.shared.enableBiometric()
+            }
+            shouldPromptBiometricEnrollment = false
+            AuthManager.shared.completeSignIn()
+            verificationState = .success
+        }
+    }
+
+    func dismissBiometricEnrollmentPrompt() {
+        shouldPromptBiometricEnrollment = false
+        AuthManager.shared.completeSignIn()
+        verificationState = .success
+    }
+
+    func handleAutoSubmitIfComplete() async {
+        guard isOTPComplete && verificationState == .idle else { return }
+        await verifyOTP()
+    }
+
+    private func mapFirebaseOTPErrorToUserMessage(_ error: NSError) -> String {
+        switch AuthErrorCode(rawValue: error.code) {
+        case .invalidVerificationCode:
+            return "The code you entered is incorrect. Please try again."
+        case .sessionExpired:
+            return "Your session has expired. Please request a new code."
+        case .networkError:
+            return "No internet connection. Please check your network."
+        default:
+            return error.localizedDescription
+        }
+    }
+
+    private func triggerShakeAnimation() async {
+        let shakeOffsets: [CGFloat] = [0, -10, 10, -8, 8, -4, 4, 0]
+        for offset in shakeOffsets {
+            shakeAnimationOffset = offset
+            try? await Task.sleep(nanoseconds: 50_000_000)
         }
     }
 }
-

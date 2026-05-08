@@ -6,45 +6,50 @@
 
 import Foundation
 import SwiftUI
+import FirebaseFirestore
+import FirebaseAuth
 import Combine
 
-enum DriverTripCompletionStatus: String {
+enum DriverTripCompletionStatus: String, Codable {
     case completed = "Completed"
     case autoCompleted = "Auto Completed"
 }
 
-enum DriverTripStopStatus {
-    case completed, skipped
+enum DriverTripStopStatus: String, Codable {
+    case completed = "completed"
+    case skipped = "skipped"
 }
 
 enum DriverTripDetailDisplayMode {
     case textView, mapView
 }
 
-struct DriverTripStopRecord: Identifiable {
-    let id = UUID()
+struct DriverTripStopRecord: Identifiable, Codable {
+    var id: String = UUID().uuidString
     let stopName: String
     let timeReached: String
     let stopStatus: DriverTripStopStatus
 }
 
-struct DriverTripPassengerPickupRecord: Identifiable {
-    let id = UUID()
+struct DriverTripPassengerPickupRecord: Identifiable, Codable {
+    var id: String = UUID().uuidString
     let passengerFullName: String
     let boardingStopName: String
 }
 
-struct DriverTripPerformanceSummary {
+struct DriverTripPerformanceSummary: Codable {
     let totalStopCount: Int
     let completedStopCount: Int
     let totalPassengersPickedUp: Int
     let tripDurationInMinutes: Int
 }
 
-struct DriverHistoryTripRecord: Identifiable {
-    let id = UUID()
+struct DriverHistoryTripRecord: Identifiable, Codable {
+    @DocumentID var id: String?
+    var driverId: String
+    var routeId: String
     let tripDate: Date
-    let sessionType: TripSession
+    let sessionType: String // e.g., "Morning", "Evening"
     let completionStatus: DriverTripCompletionStatus
     let scheduledStartTime: String
     let actualEndTime: String
@@ -59,8 +64,22 @@ final class DriverTripHistoryViewModel: ObservableObject {
     @Published var selectedTripForDetailView: DriverHistoryTripRecord? = nil
     @Published var selectedTripDetailDisplayMode: DriverTripDetailDisplayMode = .textView
     @Published var selectedDateRangeFilter: TripHistoryDateFilter = .last30Days
+    @Published var allTripRecords: [DriverHistoryTripRecord] = []
+    @Published var isLoading: Bool = false
 
-    let allTripRecords: [DriverHistoryTripRecord] = DriverHistoryTripRecord.mockDriverTrips
+    func fetchHistory() {
+        guard let userId = FirebaseAuth.Auth.auth().currentUser?.uid else { return }
+        self.isLoading = true
+        Task {
+            do {
+                let records = try await TripService.shared.fetchDriverTripHistory(driverId: userId)
+                self.allTripRecords = records
+            } catch {
+                print("🔴 Failed to fetch driver history: \(error.localizedDescription)")
+            }
+            self.isLoading = false
+        }
+    }
 
     var filteredTripRecords: [DriverHistoryTripRecord] {
         let now = Date()
@@ -118,153 +137,5 @@ final class DriverTripHistoryViewModel: ObservableObject {
 }
 
 extension DriverHistoryTripRecord {
-
-    static let mockDriverTrips: [DriverHistoryTripRecord] = {
-        let calendar = Calendar.current
-        let now = Date()
-
-        func makeDate(daysBack: Int, hour: Int, minute: Int) -> Date {
-            var components = calendar.dateComponents([.year, .month, .day], from: now)
-            components.day! -= daysBack
-            components.hour = hour
-            components.minute = minute
-            return calendar.date(from: components)!
-        }
-
-        let morningStopsTimeline: [DriverTripStopRecord] = [
-            DriverTripStopRecord(stopName: "Nugegoda Junction", timeReached: "6:38 AM", stopStatus: .completed),
-            DriverTripStopRecord(stopName: "Maharagama Town", timeReached: "6:52 AM", stopStatus: .completed),
-            DriverTripStopRecord(stopName: "Borella", timeReached: "7:11 AM", stopStatus: .completed),
-            DriverTripStopRecord(stopName: "Fort Railway Station", timeReached: "7:28 AM", stopStatus: .skipped),
-            DriverTripStopRecord(stopName: "World Trade Center", timeReached: "7:44 AM", stopStatus: .completed),
-        ]
-
-        let eveningStopsTimeline: [DriverTripStopRecord] = [
-            DriverTripStopRecord(stopName: "World Trade Center", timeReached: "5:08 PM", stopStatus: .completed),
-            DriverTripStopRecord(stopName: "Borella", timeReached: "5:27 PM", stopStatus: .completed),
-            DriverTripStopRecord(stopName: "Maharagama Town", timeReached: "5:50 PM", stopStatus: .completed),
-            DriverTripStopRecord(stopName: "Nugegoda Junction", timeReached: "6:09 PM", stopStatus: .completed),
-        ]
-
-        let morningPassengers: [DriverTripPassengerPickupRecord] = [
-            DriverTripPassengerPickupRecord(passengerFullName: "Amali Fernando", boardingStopName: "Nugegoda Junction"),
-            DriverTripPassengerPickupRecord(passengerFullName: "Ruwan Perera", boardingStopName: "Nugegoda Junction"),
-            DriverTripPassengerPickupRecord(passengerFullName: "Nimal Silva", boardingStopName: "Maharagama Town"),
-            DriverTripPassengerPickupRecord(passengerFullName: "Kalyani Jayawardena", boardingStopName: "Borella"),
-            DriverTripPassengerPickupRecord(passengerFullName: "Thilak Rajapaksa", boardingStopName: "Borella"),
-            DriverTripPassengerPickupRecord(passengerFullName: "Saman Bandara", boardingStopName: "World Trade Center"),
-            DriverTripPassengerPickupRecord(passengerFullName: "Dilrukshi Wijesinghe", boardingStopName: "World Trade Center"),
-        ]
-
-        let eveningPassengers: [DriverTripPassengerPickupRecord] = [
-            DriverTripPassengerPickupRecord(passengerFullName: "Amali Fernando", boardingStopName: "World Trade Center"),
-            DriverTripPassengerPickupRecord(passengerFullName: "Nimal Silva", boardingStopName: "World Trade Center"),
-            DriverTripPassengerPickupRecord(passengerFullName: "Kalyani Jayawardena", boardingStopName: "Borella"),
-            DriverTripPassengerPickupRecord(passengerFullName: "Prasad Gunasekara", boardingStopName: "Maharagama Town"),
-            DriverTripPassengerPickupRecord(passengerFullName: "Iresha Dissanayake", boardingStopName: "Nugegoda Junction"),
-        ]
-
-        return [
-            DriverHistoryTripRecord(
-                tripDate: makeDate(daysBack: 0, hour: 6, minute: 30),
-                sessionType: .morning,
-                completionStatus: .completed,
-                scheduledStartTime: "6:30 AM",
-                actualEndTime: "7:48 AM",
-                stopsTimeline: morningStopsTimeline,
-                passengerPickupList: morningPassengers,
-                performanceSummary: DriverTripPerformanceSummary(totalStopCount: 5, completedStopCount: 4, totalPassengersPickedUp: 7, tripDurationInMinutes: 78)
-            ),
-            DriverHistoryTripRecord(
-                tripDate: makeDate(daysBack: 0, hour: 17, minute: 0),
-                sessionType: .evening,
-                completionStatus: .completed,
-                scheduledStartTime: "5:00 PM",
-                actualEndTime: "6:14 PM",
-                stopsTimeline: eveningStopsTimeline,
-                passengerPickupList: eveningPassengers,
-                performanceSummary: DriverTripPerformanceSummary(totalStopCount: 4, completedStopCount: 4, totalPassengersPickedUp: 5, tripDurationInMinutes: 74)
-            ),
-            DriverHistoryTripRecord(
-                tripDate: makeDate(daysBack: 1, hour: 6, minute: 30),
-                sessionType: .morning,
-                completionStatus: .autoCompleted,
-                scheduledStartTime: "6:30 AM",
-                actualEndTime: "7:55 AM",
-                stopsTimeline: morningStopsTimeline,
-                passengerPickupList: morningPassengers,
-                performanceSummary: DriverTripPerformanceSummary(totalStopCount: 5, completedStopCount: 3, totalPassengersPickedUp: 6, tripDurationInMinutes: 85)
-            ),
-            DriverHistoryTripRecord(
-                tripDate: makeDate(daysBack: 1, hour: 17, minute: 0),
-                sessionType: .evening,
-                completionStatus: .completed,
-                scheduledStartTime: "5:00 PM",
-                actualEndTime: "6:18 PM",
-                stopsTimeline: eveningStopsTimeline,
-                passengerPickupList: eveningPassengers,
-                performanceSummary: DriverTripPerformanceSummary(totalStopCount: 4, completedStopCount: 4, totalPassengersPickedUp: 5, tripDurationInMinutes: 78)
-            ),
-            DriverHistoryTripRecord(
-                tripDate: makeDate(daysBack: 2, hour: 6, minute: 30),
-                sessionType: .morning,
-                completionStatus: .completed,
-                scheduledStartTime: "6:30 AM",
-                actualEndTime: "7:50 AM",
-                stopsTimeline: morningStopsTimeline,
-                passengerPickupList: morningPassengers,
-                performanceSummary: DriverTripPerformanceSummary(totalStopCount: 5, completedStopCount: 5, totalPassengersPickedUp: 7, tripDurationInMinutes: 80)
-            ),
-            DriverHistoryTripRecord(
-                tripDate: makeDate(daysBack: 4, hour: 6, minute: 30),
-                sessionType: .morning,
-                completionStatus: .completed,
-                scheduledStartTime: "6:30 AM",
-                actualEndTime: "7:45 AM",
-                stopsTimeline: morningStopsTimeline,
-                passengerPickupList: morningPassengers,
-                performanceSummary: DriverTripPerformanceSummary(totalStopCount: 5, completedStopCount: 4, totalPassengersPickedUp: 7, tripDurationInMinutes: 75)
-            ),
-            DriverHistoryTripRecord(
-                tripDate: makeDate(daysBack: 4, hour: 17, minute: 0),
-                sessionType: .evening,
-                completionStatus: .autoCompleted,
-                scheduledStartTime: "5:00 PM",
-                actualEndTime: "6:22 PM",
-                stopsTimeline: eveningStopsTimeline,
-                passengerPickupList: eveningPassengers,
-                performanceSummary: DriverTripPerformanceSummary(totalStopCount: 4, completedStopCount: 3, totalPassengersPickedUp: 4, tripDurationInMinutes: 82)
-            ),
-            DriverHistoryTripRecord(
-                tripDate: makeDate(daysBack: 7, hour: 6, minute: 30),
-                sessionType: .morning,
-                completionStatus: .completed,
-                scheduledStartTime: "6:30 AM",
-                actualEndTime: "7:47 AM",
-                stopsTimeline: morningStopsTimeline,
-                passengerPickupList: morningPassengers,
-                performanceSummary: DriverTripPerformanceSummary(totalStopCount: 5, completedStopCount: 5, totalPassengersPickedUp: 7, tripDurationInMinutes: 77)
-            ),
-            DriverHistoryTripRecord(
-                tripDate: makeDate(daysBack: 10, hour: 17, minute: 0),
-                sessionType: .evening,
-                completionStatus: .completed,
-                scheduledStartTime: "5:00 PM",
-                actualEndTime: "6:10 PM",
-                stopsTimeline: eveningStopsTimeline,
-                passengerPickupList: eveningPassengers,
-                performanceSummary: DriverTripPerformanceSummary(totalStopCount: 4, completedStopCount: 4, totalPassengersPickedUp: 5, tripDurationInMinutes: 70)
-            ),
-            DriverHistoryTripRecord(
-                tripDate: makeDate(daysBack: 14, hour: 6, minute: 30),
-                sessionType: .morning,
-                completionStatus: .completed,
-                scheduledStartTime: "6:30 AM",
-                actualEndTime: "7:52 AM",
-                stopsTimeline: morningStopsTimeline,
-                passengerPickupList: morningPassengers,
-                performanceSummary: DriverTripPerformanceSummary(totalStopCount: 5, completedStopCount: 4, totalPassengersPickedUp: 6, tripDurationInMinutes: 82)
-            ),
-        ]
-    }()
+    static let mockDriverTrips: [DriverHistoryTripRecord] = []
 }

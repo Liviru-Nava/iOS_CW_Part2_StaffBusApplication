@@ -7,11 +7,13 @@
 
 import SwiftUI
 import MapKit
+import FirebaseAuth
 
 struct DriverDashboardView: View {
 
     @StateObject private var dashboardViewModel = DriverDashboardViewModel()
     @State private var showRouteMapFullScreen: Bool = false
+    @State private var showTripSimulation: Bool = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -25,8 +27,25 @@ struct DriverDashboardView: View {
         }
         .background(Color.appBackground.ignoresSafeArea())
         .ignoresSafeArea(edges: .top)
+        .onAppear {
+            dashboardViewModel.fetchDriverData()
+            NotificationManager.shared.requestPermissions()
+        }
         .fullScreenCover(isPresented: $showRouteMapFullScreen) {
-            RouteMapFullscreenView(isPresented: $showRouteMapFullScreen, sessionType: dashboardViewModel.selectedSessionType)
+            RouteMapFullscreenView(
+                isPresented: $showRouteMapFullScreen,
+                sessionType: dashboardViewModel.selectedSessionType,
+                routeData: dashboardViewModel.fetchedRouteData
+            )
+        }
+        .fullScreenCover(isPresented: $showTripSimulation) {
+            DriverTripSimulationView(
+                routeId: dashboardViewModel.currentRouteId,
+                driverId: FirebaseAuth.Auth.auth().currentUser?.uid ?? "",
+                sessionLabel: dashboardViewModel.selectedSessionType == .morning ? "Morning" : "Evening",
+                enrolledPassengers: dashboardViewModel.selectedSessionType == .morning ? dashboardViewModel.morningEnrolledPassengers : dashboardViewModel.eveningEnrolledPassengers,
+                routeData: dashboardViewModel.fetchedRouteData
+            )
         }
     }
 
@@ -53,7 +72,8 @@ struct DriverDashboardView: View {
                 Spacer()
 
                 ZStack(alignment: .topTrailing) {
-                    Button {
+                    NavigationLink {
+                        DriverNotificationsView()
                     } label: {
                         Image(systemName: "bell.fill")
                             .font(.system(size: 17, weight: .medium))
@@ -171,8 +191,8 @@ struct DriverDashboardView: View {
 
             HStack(spacing: 12) {
                 Button {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                        dashboardViewModel.startTrip()
+                    if dashboardViewModel.isStartTripButtonEnabled {
+                        showTripSimulation = true
                     }
                 } label: {
                     HStack(spacing: 8) {
@@ -213,16 +233,18 @@ struct DriverDashboardView: View {
                 .buttonStyle(.plain)
             }
 
-            if !dashboardViewModel.isStartTripButtonEnabled {
+            if !dashboardViewModel.sessionWindowHint.isEmpty {
                 HStack(spacing: 5) {
-                    Image(systemName: "info.circle")
+                    Image(systemName: "clock.badge.exclamationmark")
                         .font(.system(size: 11))
                         .foregroundStyle(Color.statusWarning)
-                    Text("Start is available within the scheduled window only")
+                    Text(dashboardViewModel.sessionWindowHint)
                         .font(.system(size: 12))
                         .foregroundStyle(Color.textTertiary)
                 }
+                .padding(.vertical, 4)
             }
+
         }
         .padding(18)
         .background(Color.cardBackground)
@@ -308,7 +330,7 @@ struct DriverDashboardView: View {
                 .padding(.vertical, 14)
                 .background(
                     LinearGradient(
-                        colors: [Color.statusActive.opacity(0.85), Color.statusActive],
+                        colors: dashboardViewModel.isNearEndingLocation ? [Color.statusActive.opacity(0.85), Color.statusActive] : [Color.gray.opacity(0.5), Color.gray],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -316,6 +338,7 @@ struct DriverDashboardView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .buttonStyle(.plain)
+            .disabled(!dashboardViewModel.isNearEndingLocation)
         }
         .padding(18)
         .background(Color.cardBackground)
@@ -433,9 +456,13 @@ struct DriverDashboardView: View {
                     .foregroundStyle(Color.textTertiary)
             }
 
-            VStack(spacing: 8) {
-                ForEach(dashboardViewModel.currentSessionAttendanceStops) { attendanceStop in
-                    attendanceStopRow(attendanceStop: attendanceStop)
+            if dashboardViewModel.currentSessionAttendanceStops.isEmpty {
+                emptyStateCard(icon: "person.3.sequence.fill", message: "No passenger attendance scheduled yet.")
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(dashboardViewModel.currentSessionAttendanceStops) { attendanceStop in
+                        attendanceStopRow(attendanceStop: attendanceStop)
+                    }
                 }
             }
         }
@@ -462,7 +489,7 @@ struct DriverDashboardView: View {
                 Text(attendanceStop.stopName)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Color.textPrimary)
-                Text(attendanceStop.confirmedPassengerCount == 0 ? "No passengers confirmed" : "\(attendanceStop.confirmedPassengerCount) passenger\(attendanceStop.confirmedPassengerCount == 1 ? "" : "s") confirmed")
+                Text(attendanceStop.confirmedPassengerCount == 0 ? "No passengers confirmed" : "Expecting \(attendanceStop.confirmedPassengerCount) passenger\(attendanceStop.confirmedPassengerCount == 1 ? "" : "s")")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.textSecondary)
             }
@@ -524,7 +551,7 @@ struct DriverDashboardView: View {
                 Text(activeStop.stopName)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(isCurrentActiveStop ? Color.textPrimary : Color.textSecondary)
-                Text("\(activeStop.passengerCount) passenger\(activeStop.passengerCount == 1 ? "" : "s")")
+                Text("Expecting \(activeStop.passengerCount) passenger\(activeStop.passengerCount == 1 ? "" : "s")")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.textTertiary)
             }
@@ -567,6 +594,21 @@ struct DriverDashboardView: View {
             .padding(.vertical, 4)
             .background(badgeBackgroundColor)
             .clipShape(Capsule())
+    }
+
+    private func emptyStateCard(icon: String, message: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 24))
+                .foregroundStyle(Color.textTertiary)
+            Text(message)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+        .background(Color.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var tripSummarySection: some View {
@@ -738,10 +780,9 @@ struct DriverDashboardView: View {
 struct RouteMapFullscreenView: View {
     @Binding var isPresented: Bool
     var sessionType: DriverDashboardViewModel.SessionType
-    @State private var mapRegion = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 6.9271, longitude: 79.8612),
-        span: MKCoordinateSpan(latitudeDelta: 0.2, longitudeDelta: 0.2)
-    )
+    var routeData: RouteModel?
+
+    @State private var routePolyline: MKPolyline?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -749,45 +790,69 @@ struct RouteMapFullscreenView: View {
                 Rectangle()
                     .fill(Color.appBackground)
                     .ignoresSafeArea()
-                VStack(spacing: 18) {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.surfaceBackground)
-                        .frame(height: 280)
-                        .overlay(
-                            VStack(spacing: 12) {
-                                Image(systemName: "map.fill")
-                                    .font(.system(size: 48))
-                                    .foregroundStyle(Color.brandAccent)
-                                Text("Route Map Preview")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(Color.textPrimary)
-                                Text("This is a fullscreen placeholder map. Replace with MapKit when needed.")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(Color.textTertiary)
-                            }
-                            .padding(24)
-                        )
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(mockAnnotations) { item in
-                            HStack(spacing: 10) {
-                                Circle().fill(item.tint).frame(width: 10, height: 10)
-                                Text(item.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.textPrimary)
-                                Spacer()
+                Map {
+                    UserAnnotation()
+
+                    if let routePolyline = routePolyline {
+                        MapPolyline(routePolyline)
+                            .stroke(Color.brandAccent, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
+                    }
+
+                    if let route = routeData {
+                        // Start point (Evening swaps start and end conceptually, but we can just label them clearly)
+                        let isMorning = sessionType == .morning
+                        let actualStart = isMorning ? route.startLocation : route.endLocation
+                        let actualEnd = isMorning ? route.endLocation : route.startLocation
+                        let orderedStops = isMorning ? route.routeStops : route.routeStops.reversed()
+
+                        Annotation(actualStart.locationName, coordinate: CLLocationCoordinate2D(latitude: actualStart.latitude, longitude: actualStart.longitude)) {
+                            VStack(spacing: 0) {
+                                Image(systemName: "flag.circle.fill")
+                                    .font(.system(size: 28))
+                                    .foregroundColor(.green)
+                                    .background(Circle().fill(.white))
+                                Image(systemName: "triangle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.green)
+                                    .rotationEffect(.degrees(180))
+                                    .offset(y: -4)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.cardBackground)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+
+                        ForEach(Array(orderedStops.enumerated()), id: \.element.stopName) { index, stop in
+                            Annotation(stop.stopName, coordinate: CLLocationCoordinate2D(latitude: stop.latitude, longitude: stop.longitude)) {
+                                ZStack {
+                                    Circle().fill(Color.brandAccent).frame(width: 24, height: 24)
+                                    Circle().stroke(Color.white, lineWidth: 2).frame(width: 24, height: 24)
+                                    Text("\(index + 1)").font(.system(size: 12, weight: .bold)).foregroundColor(.white)
+                                }
+                            }
+                        }
+
+                        Annotation(actualEnd.locationName, coordinate: CLLocationCoordinate2D(latitude: actualEnd.latitude, longitude: actualEnd.longitude)) {
+                            VStack(spacing: 0) {
+                                Image(systemName: "flag.checkered.circle.fill")
+                                    .font(.system(size: 28))
+                                    .foregroundColor(.red)
+                                    .background(Circle().fill(.white))
+                                Image(systemName: "triangle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.red)
+                                    .rotationEffect(.degrees(180))
+                                    .offset(y: -4)
+                            }
                         }
                     }
-                    .padding(.horizontal, 16)
-
-                    Spacer()
                 }
-                .padding(.top, 80)
+                .edgesIgnoringSafeArea(.all)
+                .task {
+                    await calculateDirections()
+                }
+
             }
 
+            // Close button overlay
             HStack {
                 Spacer()
                 Button {
@@ -807,26 +872,50 @@ struct RouteMapFullscreenView: View {
         }
     }
 
-    private var mockAnnotations: [MapAnnotationItem] {
-        if sessionType == .morning {
-            return [
-                MapAnnotationItem(coordinate: CLLocationCoordinate2D(latitude: 6.8936, longitude: 79.9009), title: "Nugegoda Junction", tint: .brandAccent),
-                MapAnnotationItem(coordinate: CLLocationCoordinate2D(latitude: 6.8400, longitude: 79.9308), title: "Maharagama Town", tint: .brandAccent),
-                MapAnnotationItem(coordinate: CLLocationCoordinate2D(latitude: 6.9271, longitude: 79.8612), title: "Fort Railway Station", tint: .brandAccent),
-            ]
-        } else {
-            return [
-                MapAnnotationItem(coordinate: CLLocationCoordinate2D(latitude: 6.9271, longitude: 79.8612), title: "World Trade Center", tint: .brandAccent),
-                MapAnnotationItem(coordinate: CLLocationCoordinate2D(latitude: 6.9279, longitude: 79.8572), title: "Borella", tint: .brandAccent),
-            ]
-        }
-    }
+    private func calculateDirections() async {
+        guard let route = routeData else { return }
 
-    struct MapAnnotationItem: Identifiable {
-        let id = UUID()
-        let coordinate: CLLocationCoordinate2D
-        let title: String
-        let tint: Color
+        let isMorning = sessionType == .morning
+        let actualStart = isMorning ? route.startLocation : route.endLocation
+        let actualEnd = isMorning ? route.endLocation : route.startLocation
+        let orderedStops = isMorning ? route.routeStops : route.routeStops.reversed()
+
+        var waypoints: [CLLocationCoordinate2D] = []
+        waypoints.append(CLLocationCoordinate2D(latitude: actualStart.latitude, longitude: actualStart.longitude))
+        for stop in orderedStops {
+            waypoints.append(CLLocationCoordinate2D(latitude: stop.latitude, longitude: stop.longitude))
+        }
+        waypoints.append(CLLocationCoordinate2D(latitude: actualEnd.latitude, longitude: actualEnd.longitude))
+
+        var allCoordinates: [CLLocationCoordinate2D] = []
+
+        for i in 0..<(waypoints.count - 1) {
+            let request = MKDirections.Request()
+            request.source = MKMapItem(placemark: MKPlacemark(coordinate: waypoints[i]))
+            request.destination = MKMapItem(placemark: MKPlacemark(coordinate: waypoints[i + 1]))
+            request.transportType = .automobile
+
+            do {
+                let directions = MKDirections(request: request)
+                let response = try await directions.calculate()
+                if let firstRoute = response.routes.first {
+                    let pointCount = firstRoute.polyline.pointCount
+                    var coords = [CLLocationCoordinate2D](repeating: kCLLocationCoordinate2DInvalid, count: pointCount)
+                    firstRoute.polyline.getCoordinates(&coords, range: NSRange(location: 0, length: pointCount))
+                    
+                    if i > 0 && !coords.isEmpty {
+                        coords.removeFirst()
+                    }
+                    allCoordinates.append(contentsOf: coords)
+                }
+            } catch {
+                print("Failed to calculate polyline leg \(i): \(error.localizedDescription)")
+                allCoordinates.append(waypoints[i])
+                allCoordinates.append(waypoints[i + 1])
+            }
+        }
+
+        self.routePolyline = MKPolyline(coordinates: allCoordinates, count: allCoordinates.count)
     }
 }
 

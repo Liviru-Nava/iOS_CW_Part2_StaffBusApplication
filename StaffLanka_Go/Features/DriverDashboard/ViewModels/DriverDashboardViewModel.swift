@@ -8,9 +8,13 @@
 import Foundation
 import SwiftUI
 import Combine
+import FirebaseAuth
+import FirebaseFirestore
+import CoreLocation
+import MapKit
 
 @MainActor
-final class DriverDashboardViewModel: ObservableObject {
+final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     enum SessionType: CaseIterable, Hashable {
         case morning, evening
@@ -49,57 +53,70 @@ final class DriverDashboardViewModel: ObservableObject {
     @Published var eveningTripState: TripState = .beforeTrip
     @Published var selectedSummaryViewType: SummaryViewType = .textSummary
 
-    let driverFullName: String = "Kamal Perera"
-    let totalEnrolledPassengerCount: Int = 24
+    @Published var driverFullName: String = "Loading..."
+    @Published var totalEnrolledPassengerCount: Int = 0
+    @Published var isLoadingData: Bool = false
 
-    let morningSessionScheduledStartTime: String = "6:30 AM"
-    let morningSessionEstimatedEndTime: String = "7:45 AM"
-    let eveningSessionScheduledStartTime: String = "5:00 PM"
-    let eveningSessionEstimatedEndTime: String = "6:15 PM"
+    @Published var morningSessionScheduledStartTime: String = "Loading..."
+    @Published var morningSessionEstimatedEndTime: String = "Loading..."
+    @Published var eveningSessionScheduledStartTime: String = "Loading..."
+    @Published var eveningSessionEstimatedEndTime: String = "Loading..."
+    
+    @Published var fetchedRouteData: RouteModel?
 
-    let morningAllStops: [RouteStopInfo] = [
-        RouteStopInfo(stopName: "Nugegoda Junction", passengerCount: 6, isCompleted: false),
-        RouteStopInfo(stopName: "Maharagama Town", passengerCount: 4, isCompleted: false),
-        RouteStopInfo(stopName: "Borella", passengerCount: 7, isCompleted: false),
-        RouteStopInfo(stopName: "Fort Railway Station", passengerCount: 0, isCompleted: false),
-        RouteStopInfo(stopName: "World Trade Center", passengerCount: 7, isCompleted: false),
-    ]
+    @Published var morningAllStops: [RouteStopInfo] = []
+    @Published var eveningAllStops: [RouteStopInfo] = []
 
-    let eveningAllStops: [RouteStopInfo] = [
-        RouteStopInfo(stopName: "World Trade Center", passengerCount: 7, isCompleted: false),
-        RouteStopInfo(stopName: "Borella", passengerCount: 7, isCompleted: false),
-        RouteStopInfo(stopName: "Maharagama Town", passengerCount: 4, isCompleted: false),
-        RouteStopInfo(stopName: "Nugegoda Junction", passengerCount: 6, isCompleted: false),
-    ]
+    @Published var morningAttendanceStops: [AttendanceStopInfo] = []
+    @Published var eveningAttendanceStops: [AttendanceStopInfo] = []
 
-    let morningAttendanceStops: [AttendanceStopInfo] = [
-        AttendanceStopInfo(stopName: "Nugegoda Junction", confirmedPassengerCount: 6),
-        AttendanceStopInfo(stopName: "Maharagama Town", confirmedPassengerCount: 4),
-        AttendanceStopInfo(stopName: "Borella", confirmedPassengerCount: 7),
-        AttendanceStopInfo(stopName: "Fort Railway Station", confirmedPassengerCount: 0),
-        AttendanceStopInfo(stopName: "World Trade Center", confirmedPassengerCount: 7),
-    ]
+    @Published var morningSummaryStopRecords: [TripSummaryStopRecord] = []
+    @Published var eveningSummaryStopRecords: [TripSummaryStopRecord] = []
+    
+    @Published var morningEnrolledPassengers: [SimulationEnrolledPassenger] = []
+    @Published var eveningEnrolledPassengers: [SimulationEnrolledPassenger] = []
 
-    let eveningAttendanceStops: [AttendanceStopInfo] = [
-        AttendanceStopInfo(stopName: "World Trade Center", confirmedPassengerCount: 7),
-        AttendanceStopInfo(stopName: "Borella", confirmedPassengerCount: 7),
-        AttendanceStopInfo(stopName: "Maharagama Town", confirmedPassengerCount: 4),
-        AttendanceStopInfo(stopName: "Nugegoda Junction", confirmedPassengerCount: 6),
-    ]
+    nonisolated(unsafe) private var _morningAttendanceListener: ListenerRegistration?
+    nonisolated(unsafe) private var _eveningAttendanceListener: ListenerRegistration?
+    
+    deinit {
+        _morningAttendanceListener?.remove()
+        _eveningAttendanceListener?.remove()
+    }
 
-    let morningSummaryStopRecords: [TripSummaryStopRecord] = [
-        TripSummaryStopRecord(stopName: "Nugegoda Junction", arrivalTime: "6:38 AM", passengersPickedUp: 6),
-        TripSummaryStopRecord(stopName: "Maharagama Town", arrivalTime: "6:50 AM", passengersPickedUp: 4),
-        TripSummaryStopRecord(stopName: "Borella", arrivalTime: "7:10 AM", passengersPickedUp: 7),
-        TripSummaryStopRecord(stopName: "World Trade Center", arrivalTime: "7:41 AM", passengersPickedUp: 7),
-    ]
+    // Core Location variables
+    private var locationManager = CLLocationManager()
+    @Published var currentUserLocation: CLLocationCoordinate2D?
+    @Published var isNearEndingLocation: Bool = false
 
-    let eveningSummaryStopRecords: [TripSummaryStopRecord] = [
-        TripSummaryStopRecord(stopName: "World Trade Center", arrivalTime: "5:08 PM", passengersPickedUp: 7),
-        TripSummaryStopRecord(stopName: "Borella", arrivalTime: "5:30 PM", passengersPickedUp: 7),
-        TripSummaryStopRecord(stopName: "Maharagama Town", arrivalTime: "5:52 PM", passengersPickedUp: 4),
-        TripSummaryStopRecord(stopName: "Nugegoda Junction", arrivalTime: "6:10 PM", passengersPickedUp: 6),
-    ]
+    // Firestore trip tracking
+    private(set) var currentRouteId: String = ""
+    private var activeTripId: String? = nil
+    private var locationUpdateTimer: Timer? = nil
+
+    override init() {
+        super.init()
+        self.locationManager.delegate = self
+        self.locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        self.locationManager.requestWhenInUseAuthorization()
+        self.selectedSessionType = Calendar.current.component(.hour, from: Date()) < 12 ? .morning : .evening
+    }
+    
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let latestLocation = locations.last else { return }
+        Task { @MainActor in
+            self.currentUserLocation = latestLocation.coordinate
+            self.checkProximityToEndingLocation(currentLocation: latestLocation)
+        }
+    }
+    
+    private func checkProximityToEndingLocation(currentLocation: CLLocation) {
+        guard let route = fetchedRouteData else { return }
+        let endLocation = CLLocation(latitude: route.endLocation.latitude, longitude: route.endLocation.longitude)
+        let distance = currentLocation.distance(from: endLocation)
+        // Enable End trip if within 200 meters
+        self.isNearEndingLocation = distance <= 200
+    }
 
     var currentTripState: TripState {
         selectedSessionType == .morning ? morningTripState : eveningTripState
@@ -127,11 +144,11 @@ final class DriverDashboardViewModel: ObservableObject {
     }
 
     var currentStopName: String {
-        selectedSessionType == .morning ? "Borella" : "Borella"
+        return "Unknown"
     }
 
     var nextStopName: String {
-        selectedSessionType == .morning ? "Fort Railway Station" : "Maharagama Town"
+        return "Unknown"
     }
 
     var greetingText: String {
@@ -143,13 +160,24 @@ final class DriverDashboardViewModel: ObservableObject {
         }
     }
 
+    // Morning: 00:00–11:59  |  Evening: 12:00–23:59
     var isStartTripButtonEnabled: Bool {
-        let currentHour = Calendar.current.component(.hour, from: Date())
+        let hour = Calendar.current.component(.hour, from: Date())
         if selectedSessionType == .morning {
-            return currentHour >= 5 && currentHour < 10
+            return hour >= 0 && hour < 12
         } else {
-            return currentHour >= 15 && currentHour < 20
+            return hour >= 12 && hour <= 23
         }
+    }
+
+    var sessionWindowHint: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        if selectedSessionType == .morning && hour >= 12 {
+            return "Morning trips are available 12:00 AM – 11:59 AM"
+        } else if selectedSessionType == .evening && hour < 12 {
+            return "Evening trips are available 12:00 PM – 11:59 PM"
+        }
+        return ""
     }
 
     var totalPassengersForCurrentSummary: Int {
@@ -162,6 +190,32 @@ final class DriverDashboardViewModel: ObservableObject {
         } else {
             eveningTripState = .duringTrip
         }
+        locationManager.startUpdatingLocation()
+
+        // Persist to Firestore
+        let session = selectedSessionType == .morning ? "Morning" : "Evening"
+        guard let userId = Auth.auth().currentUser?.uid, !currentRouteId.isEmpty else { return }
+        Task {
+            do {
+                let tripId = try await TripService.shared.startTrip(
+                    routeId: currentRouteId,
+                    driverId: userId,
+                    session: session
+                )
+                self.activeTripId = tripId
+                self.startLocationUpdateTimer()
+                print("🟢 [DriverDashboardVM] Trip started, tripId: \(tripId)")
+            } catch {
+                print("🔴 [DriverDashboardVM] startTrip Firestore error: \(error.localizedDescription)")
+            }
+        }
+
+        NotificationManager.shared.scheduleNotification(
+            title: "Trip Started",
+            body: "Your \(selectedSessionType == .morning ? "morning" : "evening") session has officially begun.",
+            actionType: "TRIP_START",
+            isTripAlert: true
+        )
     }
 
     func finishTrip() {
@@ -170,9 +224,277 @@ final class DriverDashboardViewModel: ObservableObject {
         } else {
             eveningTripState = .afterTrip
         }
+        locationManager.stopUpdatingLocation()
+        stopLocationUpdateTimer()
+
+        // Persist to Firestore
+        if let tripId = activeTripId {
+            Task {
+                do {
+                    try await TripService.shared.finishTrip(tripId: tripId)
+                    print("🟢 [DriverDashboardVM] Trip finished, tripId: \(tripId)")
+                } catch {
+                    print("🔴 [DriverDashboardVM] finishTrip Firestore error: \(error.localizedDescription)")
+                }
+            }
+            activeTripId = nil
+        }
+
+        NotificationManager.shared.scheduleNotification(
+            title: "Trip Completed",
+            body: "You have arrived at the destination. Well done!",
+            actionType: "TRIP_END",
+            isTripAlert: true
+        )
+    }
+
+    // Location update timer (pushes GPS to Firestore every 5 s)
+
+    private func startLocationUpdateTimer() {
+        locationUpdateTimer?.invalidate()
+        locationUpdateTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            guard let self, let coord = self.currentUserLocation, let tripId = self.activeTripId else { return }
+            Task {
+                try? await TripService.shared.updateDriverLocation(tripId: tripId, location: coord)
+            }
+        }
+    }
+
+    private func stopLocationUpdateTimer() {
+        locationUpdateTimer?.invalidate()
+        locationUpdateTimer = nil
     }
 
     func selectSession(_ session: SessionType) {
         selectedSessionType = session
     }
-}
+
+    func fetchDriverData() {
+        guard let userId = FirebaseAuth.Auth.auth().currentUser?.uid else { return }
+
+        isLoadingData = true
+        Task {
+            do {
+                let driver = try await DriverService.shared.fetchDriver(driverId: userId)
+                self.driverFullName = driver.fullName
+                
+                do {
+                    let routeId = driver.assignedRouteId
+                self.currentRouteId = routeId
+                    let route = try await RouteService.shared.fetchRoute(routeId: routeId)
+                    self.fetchedRouteData = route
+
+                    // Fetch actual enrolled passenger count and join requests
+                    let snapshot = try? await Firestore.firestore()
+                        .collection("joinRequests")
+                        .whereField("routeId", isEqualTo: routeId)
+                        .whereField("status", isEqualTo: "accepted")
+                        .getDocuments()
+                    
+                    if let docs = snapshot?.documents {
+                        let requests = docs.compactMap { try? $0.data(as: JoinRequestModel.self) }
+                        self.totalEnrolledPassengerCount = requests.count
+                        print("🟢 [DriverDashboardVM] Enrolled passengers: \(self.totalEnrolledPassengerCount)")
+                        
+                        var mPass: [SimulationEnrolledPassenger] = []
+                        var ePass: [SimulationEnrolledPassenger] = []
+                        
+                        for req in requests {
+                            let passengerId = req.passengerId ?? UUID().uuidString
+                            if req.session == "Morning" || req.session == "Both" {
+                                mPass.append(SimulationEnrolledPassenger(id: passengerId, fullName: req.passengerName, assignedStopName: req.pickupStop, attendanceStatusLabel: "Not marked"))
+                            }
+                            if req.session == "Evening" || req.session == "Both" {
+                                ePass.append(SimulationEnrolledPassenger(id: passengerId, fullName: req.passengerName, assignedStopName: req.dropoffStop, attendanceStatusLabel: "Not marked"))
+                            }
+                        }
+                        self.morningEnrolledPassengers = mPass
+                        self.eveningEnrolledPassengers = ePass
+                    } else {
+                        self.totalEnrolledPassengerCount = 0
+                    }
+
+                    let timeFormatter = DateFormatter()
+                    timeFormatter.timeStyle = .short
+                    
+                    if route.scheduleEntries.count > 0 {
+                        let morningStr = route.scheduleEntries[0]
+                        self.morningSessionScheduledStartTime = timeFormatter.string(from: morningStr.scheduledDepartureTime)
+                        if let arr = morningStr.scheduledArrivalTime {
+                            self.morningSessionEstimatedEndTime = timeFormatter.string(from: arr)
+                        } else {
+                            self.morningSessionEstimatedEndTime = "TBD"
+                        }
+                    } else {
+                        self.morningSessionScheduledStartTime = "N/A"
+                        self.morningSessionEstimatedEndTime = "N/A"
+                    }
+                    if route.scheduleEntries.count > 1 {
+                        let eveningStr = route.scheduleEntries[1]
+                        self.eveningSessionScheduledStartTime = timeFormatter.string(from: eveningStr.scheduledDepartureTime)
+                        if let arr = eveningStr.scheduledArrivalTime {
+                            self.eveningSessionEstimatedEndTime = timeFormatter.string(from: arr)
+                        } else {
+                            self.eveningSessionEstimatedEndTime = "TBD"
+                        }
+                    } else {
+                        self.eveningSessionScheduledStartTime = "N/A"
+                        self.eveningSessionEstimatedEndTime = "N/A"
+                    }
+                    
+                    // Start listeners after fetching route and joinRequests
+                    self.startAttendanceListeners(routeId: routeId)
+                    
+                } catch {
+                    print("🔴 [DriverDashboardVM] Error fetching route for dashboard: \(error)")
+                    self.morningSessionScheduledStartTime = "Unavailable"
+                    self.morningSessionEstimatedEndTime = "Unavailable"
+                    self.eveningSessionScheduledStartTime = "Unavailable"
+                    self.eveningSessionEstimatedEndTime = "Unavailable"
+                }
+                
+                self.isLoadingData = false
+            } catch {
+                self.driverFullName = "Unknown Driver"
+                self.isLoadingData = false
+            }
+        }
+    }
+
+    private func startAttendanceListeners(routeId: String) {
+        let date = AttendanceService.relevantDate()
+        
+        _morningAttendanceListener?.remove()
+        _morningAttendanceListener = AttendanceService.shared.listenForRouteAttendance(routeId: routeId, session: "Morning", date: date) { [weak self] records in
+            guard let self = self else { return }
+            Task { @MainActor in
+                self.processAttendance(records: records, session: .morning)
+            }
+        }
+        
+        _eveningAttendanceListener?.remove()
+        _eveningAttendanceListener = AttendanceService.shared.listenForRouteAttendance(routeId: routeId, session: "Evening", date: date) { [weak self] records in
+            guard let self = self else { return }
+            Task { @MainActor in
+                self.processAttendance(records: records, session: .evening)
+            }
+        }
+    }
+
+    private func processAttendance(records: [AttendanceModel], session: SessionType) {
+        
+        // Statuses that should be counted
+        let validStatuses: Set<String> = ["attending", "not_sure"]
+
+        let countedPassengerIds = Set(
+            records
+                .filter { validStatuses.contains($0.status) }
+                .map { $0.passengerId }
+        )
+
+        let allRecordsDict = Dictionary(
+            uniqueKeysWithValues: records.map { ($0.passengerId, $0.status) }
+        )
+
+        var stopCounts: [String: Int] = [:]
+
+        if session == .morning {
+
+            for i in 0..<morningEnrolledPassengers.count {
+
+                let pId = morningEnrolledPassengers[i].id
+
+                if let status = allRecordsDict[pId] {
+
+                    let newLabel: String
+
+                    switch status {
+                    case "attending":
+                        newLabel = "Attending"
+
+                    case "not_sure":
+                        newLabel = "Not Sure"
+
+                    case "absent":
+                        newLabel = "Not coming"
+
+                    default:
+                        newLabel = "Not marked"
+                    }
+
+                    let existing = morningEnrolledPassengers[i]
+
+                    morningEnrolledPassengers[i] = SimulationEnrolledPassenger(
+                        id: existing.id,
+                        fullName: existing.fullName,
+                        assignedStopName: existing.assignedStopName,
+                        attendanceStatusLabel: newLabel
+                    )
+                }
+
+                // Count attending + not_sure
+                if countedPassengerIds.contains(pId) {
+                    stopCounts[morningEnrolledPassengers[i].assignedStopName, default: 0] += 1
+                }
+            }
+
+            self.morningAttendanceStops = stopCounts
+                .map {
+                    AttendanceStopInfo(
+                        stopName: $0.key,
+                        confirmedPassengerCount: $0.value
+                    )
+                }
+                .sorted { $0.stopName < $1.stopName }
+
+        } else {
+
+            for i in 0..<eveningEnrolledPassengers.count {
+
+                let pId = eveningEnrolledPassengers[i].id
+
+                if let status = allRecordsDict[pId] {
+
+                    let newLabel: String
+
+                    switch status {
+                    case "attending":
+                        newLabel = "Attending"
+
+                    case "not_sure":
+                        newLabel = "Not Sure"
+
+                    case "absent":
+                        newLabel = "Not coming"
+
+                    default:
+                        newLabel = "Not marked"
+                    }
+
+                    let existing = eveningEnrolledPassengers[i]
+
+                    eveningEnrolledPassengers[i] = SimulationEnrolledPassenger(
+                        id: existing.id,
+                        fullName: existing.fullName,
+                        assignedStopName: existing.assignedStopName,
+                        attendanceStatusLabel: newLabel
+                    )
+                }
+
+                // Count attending + not_sure
+                if countedPassengerIds.contains(pId) {
+                    stopCounts[eveningEnrolledPassengers[i].assignedStopName, default: 0] += 1
+                }
+            }
+
+            self.eveningAttendanceStops = stopCounts
+                .map {
+                    AttendanceStopInfo(
+                        stopName: $0.key,
+                        confirmedPassengerCount: $0.value
+                    )
+                }
+                .sorted { $0.stopName < $1.stopName }
+        }
+    }}
+

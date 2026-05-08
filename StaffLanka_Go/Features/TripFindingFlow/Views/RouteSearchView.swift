@@ -219,7 +219,7 @@ struct RouteSearchView: View {
         }
     }
 
-    private func routeCard(_ route: BusRoute) -> some View {
+    private func routeCard(_ route: PassengerRouteResult) -> some View {
         VStack(alignment: .leading, spacing: 0) {
 
             VStack(alignment: .leading, spacing: 10) {
@@ -228,7 +228,7 @@ struct RouteSearchView: View {
                         Text(route.routeName)
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Color.textPrimary)
-                        Text(route.busNumber)
+                        Text(route.plateNumber)
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Color.brandAccent)
                             .padding(.horizontal, 7)
@@ -241,7 +241,7 @@ struct RouteSearchView: View {
                         Image(systemName: "star.fill")
                             .font(.system(size: 10))
                             .foregroundStyle(Color.statusWarning)
-                        Text(String(format: "%.1f", route.rating))
+                        Text("5.0")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Color.textPrimary)
                     }
@@ -262,10 +262,10 @@ struct RouteSearchView: View {
                         .frame(width: 3, height: 3)
 
                     HStack(spacing: 5) {
-                        Image(systemName: route.vehicleType.lowercased() == "van" ? "car.fill" : "bus.fill")
+                        Image(systemName: route.busType.lowercased() == "van" ? "car.fill" : "bus.fill")
                             .font(.system(size: 10))
                             .foregroundStyle(Color.brandAccent)
-                        Text("\(route.vehicleBrand) \(route.vehicleType)")
+                        Text("\(route.busName) \(route.busType)")
                             .font(.system(size: 12))
                             .foregroundStyle(Color.brandAccent)
                     }
@@ -284,7 +284,7 @@ struct RouteSearchView: View {
                     Text("Morning")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(Color.textTertiary)
-                    Text("\(route.morningStartTime) – \(route.morningEndTime)")
+                    Text(route.morningScheduleLabel)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.textPrimary)
                 }
@@ -297,7 +297,7 @@ struct RouteSearchView: View {
                     Text("Evening")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(Color.textTertiary)
-                    Text("\(route.eveningStartTime) – \(route.eveningEndTime)")
+                    Text(route.eveningScheduleLabel)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.textPrimary)
                 }
@@ -312,7 +312,7 @@ struct RouteSearchView: View {
                     Text("Est. Monthly Fee")
                         .font(.system(size: 11))
                         .foregroundStyle(Color.textTertiary)
-                    Text("Rs. \(Int(route.estimatedMonthlyCost))")
+                    Text("Rs. \(Int(route.bothTripsPrice))")
                         .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(Color.textPrimary)
                 }
@@ -320,12 +320,9 @@ struct RouteSearchView: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("\(route.availableSeats) seats left")
+                    Text("\(route.capacity) seats total")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(seatColor(route.availableSeats))
-                    Text("of \(route.capacity)")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color.textTertiary)
+                        .foregroundStyle(Color.statusActive)
                 }
             }
             .padding(.horizontal, 16)
@@ -345,25 +342,16 @@ struct RouteSearchView: View {
                     .foregroundStyle(Color.brandPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 13)
-                    .background(route.availableSeats > 0 ? Color.brandAccent : Color.statusInactive)
+                    .background(Color.brandAccent)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
-            .disabled(route.availableSeats == 0)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
         .background(Color.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.divider, lineWidth: 1))
-    }
-
-    private func seatColor(_ seats: Int) -> Color {
-        switch seats {
-        case 0: return Color.statusDanger
-        case 1...5: return Color.statusWarning
-        default: return Color.statusActive
-        }
     }
 
     private var skeletonCard: some View {
@@ -417,8 +405,8 @@ struct LocationPickerSheet: View {
     @GestureState private var isDetectingDrag: Bool = false
 
     private var filteredList: [PredefinedLocation] {
-        if localQuery.isEmpty { return routeSearchViewModel.predefinedLocations }
-        return routeSearchViewModel.predefinedLocations.filter {
+        if localQuery.isEmpty { return routeSearchViewModel.availableLocations }
+        return routeSearchViewModel.availableLocations.filter {
             $0.name.localizedCaseInsensitiveContains(localQuery) ||
             $0.area.localizedCaseInsensitiveContains(localQuery)
         }
@@ -512,21 +500,10 @@ struct LocationPickerSheet: View {
                             isPresented = false
                         } label: {
                             HStack(spacing: 14) {
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.brandAccent.opacity(0.10))
-                                        .frame(width: 38, height: 38)
-                                    Image(systemName: "mappin.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(Color.brandAccent)
-                                }
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(location.name)
                                         .font(.system(size: 15, weight: .medium))
                                         .foregroundStyle(Color.textPrimary)
-                                    Text(location.area)
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(Color.textSecondary)
                                 }
                                 Spacer()
                                 if (activeField == .pickup && routeSearchViewModel.pickupLocation?.id == location.id) ||
@@ -543,7 +520,7 @@ struct LocationPickerSheet: View {
                         .buttonStyle(.plain)
 
                         if index < filteredList.count - 1 {
-                            Divider().padding(.leading, 72)
+                            Divider().padding(.horizontal, 20)
                         }
                     }
                 }
@@ -555,10 +532,11 @@ struct LocationPickerSheet: View {
 
     private var currentLocationRow: some View {
         Button {
+            routeSearchViewModel.isUsingCurrentLocationForPickup = true
             if activeField == .pickup {
-                routeSearchViewModel.useCurrentLocationForPickupMocked()
+                routeSearchViewModel.pickupText = "Current Location"
             } else {
-                routeSearchViewModel.useCurrentLocationForDestinationMocked()
+                routeSearchViewModel.destinationText = "Current Location"
             }
             isPresented = false
         } label: {
@@ -588,6 +566,8 @@ struct LocationPickerSheet: View {
         .buttonStyle(.plain)
     }
 }
+
+// Previews
 
 #Preview("Dark") {
     NavigationStack { RouteSearchView() }

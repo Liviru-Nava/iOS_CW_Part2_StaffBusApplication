@@ -27,6 +27,9 @@ struct DriverTripHistoryView: View {
         .background(Color.appBackground)
         .navigationTitle("Trip History")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            tripHistoryViewModel.fetchHistory()
+        }
     }
 
     private var tripSummaryBanner: some View {
@@ -105,20 +108,33 @@ struct DriverTripHistoryView: View {
 
     private var groupedTripRecordsList: some View {
         VStack(alignment: .leading, spacing: 24) {
-            ForEach(tripHistoryViewModel.tripRecordsGroupedByDate, id: \.0) { groupLabel, tripsInGroup in
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(groupLabel)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.textTertiary)
-                        .textCase(.uppercase)
-                        .tracking(0.5)
-                        .padding(.horizontal, 16)
+            if tripHistoryViewModel.tripRecordsGroupedByDate.isEmpty {
+                VStack(spacing: 20) {
+                    Image(systemName: "car.top.door.sliding.left.open")
+                        .font(.system(size: 44))
+                        .foregroundStyle(Color.statusInactive)
+                    Text("No trips recorded yet.")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Color.textSecondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, 80)
+            } else {
+                ForEach(tripHistoryViewModel.tripRecordsGroupedByDate, id: \.0) { groupLabel, tripsInGroup in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(groupLabel)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.textTertiary)
+                            .textCase(.uppercase)
+                            .tracking(0.5)
+                            .padding(.horizontal, 16)
 
-                    ForEach(tripsInGroup) { tripRecord in
-                        NavigationLink(destination: DriverTripDetailView(tripRecord: tripRecord)) {
-                            DriverTripHistoryCard(tripRecord: tripRecord)
+                        ForEach(tripsInGroup) { tripRecord in
+                            NavigationLink(destination: DriverTripDetailView(tripRecord: tripRecord)) {
+                                DriverTripHistoryCard(tripRecord: tripRecord)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -156,11 +172,11 @@ struct DriverTripHistoryCard: View {
     let tripRecord: DriverHistoryTripRecord
 
     private var sessionDisplayColor: Color {
-        tripRecord.sessionType == .morning ? Color.statusWarning : Color.brandAccent
+        tripRecord.sessionType == "Morning" ? Color.statusWarning : Color.brandAccent
     }
 
     private var sessionIconName: String {
-        tripRecord.sessionType == .morning ? "sunrise.fill" : "moon.fill"
+        tripRecord.sessionType == "Morning" ? "sunrise.fill" : "moon.fill"
     }
 
     private var completionStatusColor: Color {
@@ -181,7 +197,7 @@ struct DriverTripHistoryCard: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
-                        Text(tripRecord.sessionType == .morning ? "Morning Trip" : "Evening Trip")
+                        Text(tripRecord.sessionType == "Morning" ? "Morning Trip" : "Evening Trip")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Color.textPrimary)
                         completionStatusPill

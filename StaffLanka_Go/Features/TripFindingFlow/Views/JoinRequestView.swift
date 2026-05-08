@@ -12,11 +12,21 @@ struct JoinRequestView: View {
     @StateObject private var joinRequestViewModel: JoinRequestViewModel
     @Environment(\.dismiss) private var dismiss
 
-    init(pickupLocation: String, destinationLocation: String, routeName: String) {
+    init(
+        pickupLocation: String,
+        destinationLocation: String,
+        routeName: String,
+        routeId: String,
+        driverId: String,
+        stops: [String]
+    ) {
         _joinRequestViewModel = StateObject(wrappedValue: JoinRequestViewModel(
-            pickupLocation: pickupLocation,
+            pickupLocation:      pickupLocation,
             destinationLocation: destinationLocation,
-            routeName: routeName
+            routeName:           routeName,
+            routeId:             routeId,
+            driverId:            driverId,
+            stops:               stops
         ))
     }
 
@@ -71,6 +81,22 @@ struct JoinRequestView: View {
                     journeySection
                     sessionSection
                     contactSection
+
+                    // Error banner
+                    if let errorMsg = joinRequestViewModel.submitError {
+                        HStack(spacing: 10) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(Color.statusDanger)
+                            Text(errorMsg)
+                                .font(.system(size: 13))
+                                .foregroundStyle(Color.statusDanger)
+                            Spacer()
+                        }
+                        .padding(14)
+                        .background(Color.statusDanger.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.statusDanger.opacity(0.3), lineWidth: 1))
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 24)
@@ -81,11 +107,19 @@ struct JoinRequestView: View {
             Button {
                 joinRequestViewModel.submitRequest()
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "paperplane.fill")
-                        .font(.system(size: 13))
-                    Text("Submit Request")
-                        .font(.system(size: 15, weight: .semibold))
+                ZStack {
+                    HStack(spacing: 8) {
+                        if joinRequestViewModel.isSubmitting {
+                            ProgressView()
+                                .tint(Color.brandPrimary)
+                                .scaleEffect(0.85)
+                        } else {
+                            Image(systemName: "paperplane.fill")
+                                .font(.system(size: 13))
+                        }
+                        Text(joinRequestViewModel.isSubmitting ? "Sending..." : "Submit Request")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
                 }
                 .foregroundStyle(joinRequestViewModel.canSubmit ? Color.brandPrimary : Color.white)
                 .frame(maxWidth: .infinity)
@@ -242,7 +276,7 @@ struct JoinRequestView: View {
                 .foregroundStyle(Color.textSecondary)
 
             VStack(spacing: 0) {
-                inputRow(placeholder: "Phone Number", text: $joinRequestViewModel.phone, keyboardType: .phonePad)
+                inputRow(placeholder: "Phone Number *", text: $joinRequestViewModel.phone, keyboardType: .phonePad)
                 Divider().padding(.leading, 16)
                 inputRow(placeholder: "Name (Optional)", text: $joinRequestViewModel.name, keyboardType: .default)
                 Divider().padding(.leading, 16)
@@ -308,6 +342,8 @@ struct JoinRequestView: View {
         }
     }
 }
+
+// Location Picker Sheet (stop names from the real route)
 
 struct JoinLocationPickerSheet: View {
 
@@ -444,11 +480,16 @@ struct JoinLocationPickerSheet: View {
     }
 }
 
+ //Previews
+
 #Preview("Dark mode") {
     JoinRequestView(
         pickupLocation: "Borella",
         destinationLocation: "Maharagama",
-        routeName: "Colombo Fort → Maharagama"
+        routeName: "Colombo Fort → Maharagama",
+        routeId: "preview_route",
+        driverId: "preview_driver",
+        stops: ["Colombo Fort", "Borella", "Nugegoda", "Maharagama"]
     )
     .preferredColorScheme(.dark)
 }
@@ -457,7 +498,10 @@ struct JoinLocationPickerSheet: View {
     JoinRequestView(
         pickupLocation: "Borella",
         destinationLocation: "Maharagama",
-        routeName: "Colombo Fort → Maharagama"
+        routeName: "Colombo Fort → Maharagama",
+        routeId: "preview_route",
+        driverId: "preview_driver",
+        stops: ["Colombo Fort", "Borella", "Nugegoda", "Maharagama"]
     )
     .preferredColorScheme(.light)
 }

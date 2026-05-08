@@ -9,11 +9,11 @@ import SwiftUI
 
 struct DriverPassengerRequestsView: View {
 
-    @ObservedObject var profileViewModel: DriverProfileViewModel
+    @ObservedObject var driverProfileViewModel: DriverProfileViewModel
 
     var body: some View {
         List {
-            if profileViewModel.passengerRequestsList.isEmpty {
+            if driverProfileViewModel.passengerRequestsList.isEmpty {
                 emptyStateSection
             } else {
                 summarySection
@@ -31,25 +31,25 @@ struct DriverPassengerRequestsView: View {
         Section {
             HStack(spacing: 0) {
                 summaryStatCell(
-                    value: "\(profileViewModel.passengerRequestsList.count)",
+                    value: "\(driverProfileViewModel.passengerRequestsList.count)",
                     label: "Pending",
                     valueColor: .statusWarning
                 )
                 Divider().frame(height: 36)
                 summaryStatCell(
-                    value: "\(profileViewModel.passengerRequestsList.filter { $0.preferredSessionType == .morningOnly }.count)",
+                    value: "\(driverProfileViewModel.passengerRequestsList.filter { $0.preferredSessionType == .morningOnly }.count)",
                     label: "Morning",
                     valueColor: .statusWarning
                 )
                 Divider().frame(height: 36)
                 summaryStatCell(
-                    value: "\(profileViewModel.passengerRequestsList.filter { $0.preferredSessionType == .eveningOnly }.count)",
+                    value: "\(driverProfileViewModel.passengerRequestsList.filter { $0.preferredSessionType == .eveningOnly }.count)",
                     label: "Evening",
                     valueColor: Color(hex: "#FF7B54")
                 )
                 Divider().frame(height: 36)
                 summaryStatCell(
-                    value: "\(profileViewModel.passengerRequestsList.filter { $0.preferredSessionType == .bothSessions }.count)",
+                    value: "\(driverProfileViewModel.passengerRequestsList.filter { $0.preferredSessionType == .bothSessions }.count)",
                     label: "Both",
                     valueColor: .brandAccent
                 )
@@ -73,7 +73,7 @@ struct DriverPassengerRequestsView: View {
 
     private var requestsSection: some View {
         Section {
-            ForEach(profileViewModel.passengerRequestsList) { request in
+            ForEach(driverProfileViewModel.passengerRequestsList) { request in
                 passengerRequestRow(request: request)
                     .listRowBackground(Color.cardBackground)
             }
@@ -84,6 +84,8 @@ struct DriverPassengerRequestsView: View {
 
     private func passengerRequestRow(request: DriverProfileViewModel.PassengerJoinRequest) -> some View {
         VStack(alignment: .leading, spacing: 12) {
+
+            // Header: avatar + name + session badge
             HStack(spacing: 12) {
                 ZStack {
                     Circle()
@@ -107,8 +109,21 @@ struct DriverPassengerRequestsView: View {
                         .clipShape(Capsule())
                 }
                 Spacer()
+
+                // Phone number button
+                if !request.passengerPhone.isEmpty {
+                    Link(destination: URL(string: "tel:\(request.passengerPhone.filter { $0.isNumber })")!) {
+                        Image(systemName: "phone.fill")
+                            .font(.system(size: 13))
+                            .foregroundColor(.statusActive)
+                            .frame(width: 34, height: 34)
+                            .background(Color.statusActive.opacity(0.10))
+                            .clipShape(Circle())
+                    }
+                }
             }
 
+            // Pickup → Drop-off row
             HStack(spacing: 8) {
                 Image(systemName: "arrow.up.to.line")
                     .font(.system(size: 11))
@@ -130,9 +145,27 @@ struct DriverPassengerRequestsView: View {
                     .foregroundColor(.textSecondary)
             }
 
+            // Note from passenger (if any)
+            if !request.noteFromPassenger.isEmpty {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "text.bubble.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.textTertiary)
+                        .padding(.top, 1)
+                    Text(request.noteFromPassenger)
+                        .font(.system(size: 12))
+                        .foregroundColor(.textSecondary)
+                        .lineLimit(3)
+                }
+                .padding(10)
+                .background(Color.surfaceBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            // Accept / Reject buttons
             HStack(spacing: 10) {
                 Button {
-                    profileViewModel.acceptPassengerJoinRequest(requestIdentifier: request.id)
+                    driverProfileViewModel.acceptPassengerJoinRequest(requestIdentifier: request.id)
                 } label: {
                     Label("Accept", systemImage: "checkmark")
                         .font(.system(size: 14, weight: .semibold))
@@ -145,7 +178,7 @@ struct DriverPassengerRequestsView: View {
                 .buttonStyle(.plain)
 
                 Button {
-                    profileViewModel.rejectPassengerJoinRequest(requestIdentifier: request.id)
+                    driverProfileViewModel.rejectPassengerJoinRequest(requestIdentifier: request.id)
                 } label: {
                     Label("Reject", systemImage: "xmark")
                         .font(.system(size: 14, weight: .semibold))
@@ -171,14 +204,14 @@ struct DriverPassengerRequestsView: View {
                 Text("No Pending Requests")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.textPrimary)
-                Text("New passenger join requests will appear here.")
+                Text("New passenger join requests will appear here automatically.")
                     .font(.system(size: 14))
                     .foregroundColor(.textSecondary)
                     .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 40)
-            .listRowBackground(Color.clear)
+            .listRowBackground(Color.cardBackground)
         }
     }
 
