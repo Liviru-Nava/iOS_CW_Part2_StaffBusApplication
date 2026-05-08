@@ -30,7 +30,8 @@ final class OTPVerificationViewModel: ObservableObject {
     @Published var shouldPromptBiometricEnrollment: Bool = false
     @Published var isBiometricEnrolling: Bool = false
 
-    private var countdownTask: Task<Void, Never>?
+    private var resendCountdownTask: Task<Void, Never>?
+    private var authenticatedUserId: String = ""
 
     init(phoneNumber: String) {
         self.phoneNumber = phoneNumber
@@ -49,9 +50,9 @@ final class OTPVerificationViewModel: ObservableObject {
     }
 
     func startResendCountdown() {
-        countdownTask?.cancel()
+        resendCountdownTask?.cancel()
         secondsRemainingForResend = 30
-        countdownTask = Task {
+        resendCountdownTask = Task {
             while secondsRemainingForResend > 0 {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 if Task.isCancelled { return }
@@ -91,15 +92,19 @@ final class OTPVerificationViewModel: ObservableObject {
         )
         do {
             let authDataResult = try await Auth.auth().signIn(with: phoneAuthCredential)
-            let authenticatedUserId = authDataResult.user.uid
-            let authenticatedPhoneNumber = authDataResult.user.phoneNumber ?? phoneNumber
+            let resolvedUserId = authDataResult.user.uid
+            let resolvedPhoneNumber = authDataResult.user.phoneNumber ?? phoneNumber
+
+            authenticatedUserId = resolvedUserId
 
             try await UserService.shared.createUserIfNeeded(
-                userId: authenticatedUserId,
-                phoneNumber: authenticatedPhoneNumber
+                userId: resolvedUserId,
+                phoneNumber: resolvedPhoneNumber
             )
 
-            AuthManager.shared.signIn(phoneNumber: authenticatedPhoneNumber)
+            AuthManager.shared.signIn(phoneNumber: resolvedPhoneNumber)
+
+            await fireWelcomeLoginNotificationForUser(userId: resolvedUserId)
 
             if !AuthManager.shared.isBiometricEnabled
                 && BiometricService.shared.deviceSupportsBiometricAuthentication {
@@ -115,14 +120,30 @@ final class OTPVerificationViewModel: ObservableObject {
         }
     }
 
+    private func fireWelcomeLoginNotificationForUser(userId: String) async {
+        do {
+            let fetchedUserProfile = try await UserService.shared.fetchUser(userId: userId)
+            let resolvedDisplayName = fetchedUserProfile?.fullName ?? ""
+            NotificationManager.shared.sendWelcomeLoginNotification(
+                userDisplayName: resolvedDisplayName,
+                userId: userId
+            )
+        } catch {
+            NotificationManager.shared.sendWelcomeLoginNotification(
+                userDisplayName: "",
+                userId: userId
+            )
+        }
+    }
+
     func enrollBiometric() {
         isBiometricEnrolling = true
         Task {
-            let challengeSucceeded = await BiometricService.shared.authenticateWithBiometrics(
+            let biometricChallengeSucceeded = await BiometricService.shared.authenticateWithBiometrics(
                 reasonMessage: "Verify your identity to enable \(BiometricService.shared.biometricTypeDisplayName)"
             )
             isBiometricEnrolling = false
-            if challengeSucceeded {
+            if biometricChallengeSucceeded {
                 AuthManager.shared.enableBiometric()
             }
             shouldPromptBiometricEnrollment = false

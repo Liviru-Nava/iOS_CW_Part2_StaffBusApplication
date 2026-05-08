@@ -15,44 +15,258 @@ struct PassengerTripTrackingView: View {
     let driverName: String
     let plateNumber: String
     let session: String
+    let passengerPickupStopName: String
+    let passengerDropOffStopName: String
+    let passengerFullName: String
 
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var vm: TripTrackingViewModel
+    @StateObject private var tripTrackingViewModel: TripTrackingViewModel
+
+    @State private var simulatorTestPanelIsVisible: Bool = false
 
     init(
         tripId: String,
         routeData: RouteModel?,
         driverName: String,
         plateNumber: String,
-        session: String
+        session: String,
+        passengerPickupStopName: String,
+        passengerDropOffStopName: String,
+        passengerFullName: String
     ) {
-        self.tripId      = tripId
-        self.routeData   = routeData
-        self.driverName  = driverName
+        self.tripId = tripId
+        self.routeData = routeData
+        self.driverName = driverName
         self.plateNumber = plateNumber
-        self.session     = session
-        _vm = StateObject(wrappedValue: TripTrackingViewModel(tripId: tripId))
+        self.session = session
+        self.passengerPickupStopName = passengerPickupStopName
+        self.passengerDropOffStopName = passengerDropOffStopName
+        self.passengerFullName = passengerFullName
+
+        let displayNameForRoute: String
+        if let route = routeData {
+            displayNameForRoute = (route.startName ?? route.startLocation.locationName)
+                + " → "
+                + (route.endName ?? route.endLocation.locationName)
+        } else {
+            displayNameForRoute = session + " Route"
+        }
+
+        _tripTrackingViewModel = StateObject(
+            wrappedValue: TripTrackingViewModel(
+                tripId: tripId,
+                routeData: routeData,
+                sessionLabel: session,
+                passengerPickupStopName: passengerPickupStopName,
+                passengerDropOffStopName: passengerDropOffStopName,
+                routeDisplayName: displayNameForRoute,
+                passengerFullName: passengerFullName
+            )
+        )
     }
 
     var body: some View {
         ZStack(alignment: .top) {
             mapLayer
             headerOverlay
-            if vm.tripCompleted {
+            simulatorTestFloatingToggleButton
+            if simulatorTestPanelIsVisible {
+                simulatorTestPanel
+            }
+            if tripTrackingViewModel.tripCompleted {
                 completedOverlay
             }
         }
         .ignoresSafeArea()
-        .onAppear { vm.startListening() }
+        .onAppear {
+            tripTrackingViewModel.startLiveActivityWhenPassengerBeginsTracking()
+            tripTrackingViewModel.startListeningToFirestoreTripUpdates()
+        }
     }
 
-    // Map
+    private var simulatorTestFloatingToggleButton: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
+                        simulatorTestPanelIsVisible.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "wrench.and.screwdriver.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(simulatorTestPanelIsVisible ? "Hide Tests" : "Test LA")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color(red: 0.55, green: 0.30, blue: 0.90))
+                    .clipShape(Capsule())
+                    .shadow(color: Color.black.opacity(0.30), radius: 8, x: 0, y: 4)
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 20)
+                .padding(.bottom, simulatorTestPanelIsVisible ? 330 : 40)
+                .animation(.spring(response: 0.35, dampingFraction: 0.78), value: simulatorTestPanelIsVisible)
+            }
+        }
+    }
+
+    private var simulatorTestPanel: some View {
+        VStack {
+            Spacer()
+
+            VStack(alignment: .leading, spacing: 0) {
+
+                HStack(spacing: 8) {
+                    Image(systemName: "wrench.and.screwdriver.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color(red: 0.55, green: 0.30, blue: 0.90))
+                    Text("Simulator Live Activity Tests")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Color.textPrimary)
+                    Spacer()
+                    Text("DEBUG ONLY")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color(red: 0.55, green: 0.30, blue: 0.90))
+                        .clipShape(Capsule())
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 16)
+                .padding(.bottom, 4)
+
+                Text("Tap a button, then press Command+L to lock the simulator and see the Live Activity banner.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.textSecondary)
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 14)
+
+                Divider().padding(.horizontal, 18)
+
+                VStack(spacing: 10) {
+
+                    simulatorTestActionButton(
+                        buttonLabel: "1. Start Live Activity (Pre-Pickup)",
+                        buttonSubtitle: "Bus at Fort, 15 min, 2 stops to your pickup at Wattala",
+                        buttonAccentColor: Color.statusActive
+                    ) {
+                        PassengerLiveActivityManager.shared.startLiveActivityForPassengerTrip(
+                            routeDisplayName: "Fort → Kaduwela",
+                            passengerFullName: passengerFullName.isEmpty ? "Test Passenger" : passengerFullName,
+                            sessionLabel: session.isEmpty ? "Morning" : session,
+                            passengerPickupStopName: passengerPickupStopName.isEmpty ? "Wattala" : passengerPickupStopName,
+                            passengerDropOffStopName: passengerDropOffStopName.isEmpty ? "Kaduwela" : passengerDropOffStopName,
+                            estimatedMinutesUntilPickup: 15,
+                            nameOfCurrentBusStop: "Fort",
+                            numberOfStopsUntilPickup: 2
+                        )
+                    }
+
+                    simulatorTestActionButton(
+                        buttonLabel: "2. Update — Bus Closer (Pre-Pickup)",
+                        buttonSubtitle: "Bus now at Slave Island, 8 min, 1 stop remaining",
+                        buttonAccentColor: Color.statusWarning
+                    ) {
+                        PassengerLiveActivityManager.shared.updateLiveActivityWithCurrentBusProgress(
+                            nameOfCurrentBusStop: "Slave Island",
+                            estimatedMinutesUntilPassengerRelevantStop: 8,
+                            numberOfStopsRemainingUntilPassengerRelevantStop: 1,
+                            passengerHasAlreadyBeenPickedUp: false,
+                            sessionLabel: session.isEmpty ? "Morning" : session,
+                            passengerPickupStopName: passengerPickupStopName.isEmpty ? "Wattala" : passengerPickupStopName,
+                            passengerDropOffStopName: passengerDropOffStopName.isEmpty ? "Kaduwela" : passengerDropOffStopName
+                        )
+                    }
+
+                    simulatorTestActionButton(
+                        buttonLabel: "3. Update — Passenger Picked Up",
+                        buttonSubtitle: "Bus at Wattala, now heading to drop-off, 2 stops away",
+                        buttonAccentColor: Color.brandAccent
+                    ) {
+                        PassengerLiveActivityManager.shared.updateLiveActivityWithCurrentBusProgress(
+                            nameOfCurrentBusStop: "Wattala",
+                            estimatedMinutesUntilPassengerRelevantStop: 15,
+                            numberOfStopsRemainingUntilPassengerRelevantStop: 2,
+                            passengerHasAlreadyBeenPickedUp: true,
+                            sessionLabel: session.isEmpty ? "Morning" : session,
+                            passengerPickupStopName: passengerPickupStopName.isEmpty ? "Wattala" : passengerPickupStopName,
+                            passengerDropOffStopName: passengerDropOffStopName.isEmpty ? "Kaduwela" : passengerDropOffStopName
+                        )
+                    }
+
+                    simulatorTestActionButton(
+                        buttonLabel: "4. End Live Activity",
+                        buttonSubtitle: "Simulates trip completion — banner disappears after 10 seconds",
+                        buttonAccentColor: Color.statusDanger
+                    ) {
+                        PassengerLiveActivityManager.shared.endLiveActivityAfterTripCompletion()
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 18)
+            }
+            .background(Color.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .strokeBorder(Color(red: 0.55, green: 0.30, blue: 0.90).opacity(0.35), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.25), radius: 16, x: 0, y: -4)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 32)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    private func simulatorTestActionButton(
+        buttonLabel: String,
+        buttonSubtitle: String,
+        buttonAccentColor: Color,
+        buttonAction: @escaping () -> Void
+    ) -> some View {
+        Button(action: buttonAction) {
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(buttonAccentColor.opacity(0.18))
+                    .frame(width: 4, height: 38)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(buttonLabel)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.textPrimary)
+                        .multilineTextAlignment(.leading)
+                    Text(buttonSubtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.textSecondary)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer()
+                Image(systemName: "play.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(buttonAccentColor)
+                    .padding(8)
+                    .background(buttonAccentColor.opacity(0.12))
+                    .clipShape(Circle())
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color.surfaceBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+    }
 
     private var mapLayer: some View {
-        Map(position: $vm.cameraPosition) {
+        Map(position: $tripTrackingViewModel.cameraPosition) {
             UserAnnotation()
 
-            if let coord = vm.driverCoordinate {
+            if let coord = tripTrackingViewModel.driverCoordinate {
                 Annotation("Driver", coordinate: coord) {
                     ZStack {
                         Circle()
@@ -93,8 +307,6 @@ struct PassengerTripTrackingView: View {
         }
         .mapStyle(.standard(elevation: .realistic))
     }
-
-    // Header overlay
 
     private var headerOverlay: some View {
         VStack(spacing: 0) {
@@ -152,7 +364,7 @@ struct PassengerTripTrackingView: View {
                         .clipShape(Capsule())
                 }
 
-                if let updated = vm.locationUpdatedAt {
+                if let updated = tripTrackingViewModel.locationUpdatedAt {
                     HStack(spacing: 4) {
                         Image(systemName: "location.fill")
                             .font(.system(size: 10))
@@ -176,8 +388,6 @@ struct PassengerTripTrackingView: View {
             Spacer()
         }
     }
-
-    // Trip completed overlay
 
     private var completedOverlay: some View {
         ZStack {

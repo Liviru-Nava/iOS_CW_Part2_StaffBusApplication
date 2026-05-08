@@ -12,18 +12,80 @@
 		5A7A3D122F8B94C3008D34BE /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5A7A3D112F8B94C3008D34BE /* GoogleService-Info.plist */; };
 		5A7A3D262F8BDAAA008D34BE /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 5A7A3D252F8BDAAA008D34BE /* FirebaseFirestore */; };
 		5A7A3D282F8BE112008D34BE /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5A7A3D272F8BE112008D34BE /* FirebaseCore */; };
+		5ABBF1EA2FADC71C00DB335D /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5ABBF1E92FADC71B00DB335D /* WidgetKit.framework */; };
+		5ABBF1EC2FADC71C00DB335D /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5ABBF1EB2FADC71C00DB335D /* SwiftUI.framework */; };
+		5ABBF1FB2FADC71D00DB335D /* StaffLankaGoWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5ABBF1E82FADC71B00DB335D /* StaffLankaGoWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5ABBF2112FADCB1E00DB335D /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5ABBF2102FADCB1E00DB335D /* ActivityKit.framework */; };
+		5ABBF2122FADCB3400DB335D /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5ABBF2102FADCB1E00DB335D /* ActivityKit.framework */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		5ABBF1F92FADC71D00DB335D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5A826B3B2F7191960044237A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5ABBF1E72FADC71B00DB335D;
+			remoteInfo = StaffLankaGoWidgetExtensionExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		5ABBF2002FADC71D00DB335D /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				5ABBF1FB2FADC71D00DB335D /* StaffLankaGoWidgetExtensionExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		5A23192E2F9783C3003EC56B /* StaffLanka-Go-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "StaffLanka-Go-Info.plist"; sourceTree = "<group>"; };
 		5A7A3D112F8B94C3008D34BE /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		5A826B432F7191960044237A /* StaffLanka_Go.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StaffLanka_Go.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5ABBF1E82FADC71B00DB335D /* StaffLankaGoWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StaffLankaGoWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		5ABBF1E92FADC71B00DB335D /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		5ABBF1EB2FADC71C00DB335D /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		5ABBF2102FADCB1E00DB335D /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5ABBF1FC2FADC71D00DB335D /* Exceptions for "StaffLankaGoWidgetExtension" folder in "StaffLankaGoWidgetExtensionExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 5ABBF1E72FADC71B00DB335D /* StaffLankaGoWidgetExtensionExtension */;
+		};
+		5ABBF21D2FADDED800DB335D /* Exceptions for "StaffLanka_Go" folder in "StaffLankaGoWidgetExtensionExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				LiveActivity/PassengerLiveActivityManager.swift,
+				LiveActivity/StaffLankaBusLiveActivityAttributes.swift,
+			);
+			target = 5ABBF1E72FADC71B00DB335D /* StaffLankaGoWidgetExtensionExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		5A826B452F7191960044237A /* StaffLanka_Go */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5ABBF21D2FADDED800DB335D /* Exceptions for "StaffLanka_Go" folder in "StaffLankaGoWidgetExtensionExtension" target */,
+			);
 			path = StaffLanka_Go;
+			sourceTree = "<group>";
+		};
+		5ABBF1ED2FADC71C00DB335D /* StaffLankaGoWidgetExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5ABBF1FC2FADC71D00DB335D /* Exceptions for "StaffLankaGoWidgetExtension" folder in "StaffLankaGoWidgetExtensionExtension" target */,
+			);
+			path = StaffLankaGoWidgetExtension;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -35,7 +97,18 @@
 			files = (
 				5A7A3D0C2F8B91BC008D34BE /* FirebaseAuth in Frameworks */,
 				5A7A3D282F8BE112008D34BE /* FirebaseCore in Frameworks */,
+				5ABBF2112FADCB1E00DB335D /* ActivityKit.framework in Frameworks */,
 				5A7A3D262F8BDAAA008D34BE /* FirebaseFirestore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5ABBF1E52FADC71B00DB335D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5ABBF2122FADCB3400DB335D /* ActivityKit.framework in Frameworks */,
+				5ABBF1EC2FADC71C00DB335D /* SwiftUI.framework in Frameworks */,
+				5ABBF1EA2FADC71C00DB335D /* WidgetKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -45,6 +118,9 @@
 		5A7A3D242F8BDAAA008D34BE /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				5ABBF2102FADCB1E00DB335D /* ActivityKit.framework */,
+				5ABBF1E92FADC71B00DB335D /* WidgetKit.framework */,
+				5ABBF1EB2FADC71C00DB335D /* SwiftUI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -54,6 +130,7 @@
 			children = (
 				5A23192E2F9783C3003EC56B /* StaffLanka-Go-Info.plist */,
 				5A826B452F7191960044237A /* StaffLanka_Go */,
+				5ABBF1ED2FADC71C00DB335D /* StaffLankaGoWidgetExtension */,
 				5A826B442F7191960044237A /* Products */,
 				5A7A3D112F8B94C3008D34BE /* GoogleService-Info.plist */,
 				5A7A3D242F8BDAAA008D34BE /* Frameworks */,
@@ -64,6 +141,7 @@
 			isa = PBXGroup;
 			children = (
 				5A826B432F7191960044237A /* StaffLanka_Go.app */,
+				5ABBF1E82FADC71B00DB335D /* StaffLankaGoWidgetExtensionExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -78,10 +156,12 @@
 				5A826B3F2F7191960044237A /* Sources */,
 				5A826B402F7191960044237A /* Frameworks */,
 				5A826B412F7191960044237A /* Resources */,
+				5ABBF2002FADC71D00DB335D /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				5ABBF1FA2FADC71D00DB335D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				5A826B452F7191960044237A /* StaffLanka_Go */,
@@ -96,6 +176,28 @@
 			productReference = 5A826B432F7191960044237A /* StaffLanka_Go.app */;
 			productType = "com.apple.product-type.application";
 		};
+		5ABBF1E72FADC71B00DB335D /* StaffLankaGoWidgetExtensionExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5ABBF1FD2FADC71D00DB335D /* Build configuration list for PBXNativeTarget "StaffLankaGoWidgetExtensionExtension" */;
+			buildPhases = (
+				5ABBF1E42FADC71B00DB335D /* Sources */,
+				5ABBF1E52FADC71B00DB335D /* Frameworks */,
+				5ABBF1E62FADC71B00DB335D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				5ABBF1ED2FADC71C00DB335D /* StaffLankaGoWidgetExtension */,
+			);
+			name = StaffLankaGoWidgetExtensionExtension;
+			packageProductDependencies = (
+			);
+			productName = StaffLankaGoWidgetExtensionExtension;
+			productReference = 5ABBF1E82FADC71B00DB335D /* StaffLankaGoWidgetExtensionExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -108,6 +210,10 @@
 				TargetAttributes = {
 					5A826B422F7191960044237A = {
 						CreatedOnToolsVersion = 26.2;
+					};
+					5ABBF1E72FADC71B00DB335D = {
+						CreatedOnToolsVersion = 26.2;
+						LastSwiftMigration = 2620;
 					};
 				};
 			};
@@ -129,6 +235,7 @@
 			projectRoot = "";
 			targets = (
 				5A826B422F7191960044237A /* StaffLanka_Go */,
+				5ABBF1E72FADC71B00DB335D /* StaffLankaGoWidgetExtensionExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -143,6 +250,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5ABBF1E62FADC71B00DB335D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -153,7 +267,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5ABBF1E42FADC71B00DB335D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		5ABBF1FA2FADC71D00DB335D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5ABBF1E72FADC71B00DB335D /* StaffLankaGoWidgetExtensionExtension */;
+			targetProxy = 5ABBF1F92FADC71D00DB335D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		5A826B4C2F7191970044237A /* Debug */ = {
@@ -343,6 +472,71 @@
 			};
 			name = Release;
 		};
+		5ABBF1FE2FADC71D00DB335D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W2JVDPC4G5;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StaffLankaGoWidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = StaffLankaGoWidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.002.app.StaffLanka-Go.StaffLankaGoWidgetExtension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		5ABBF1FF2FADC71D00DB335D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W2JVDPC4G5;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StaffLankaGoWidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = StaffLankaGoWidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.002.app.StaffLanka-Go.StaffLankaGoWidgetExtension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -360,6 +554,15 @@
 			buildConfigurations = (
 				5A826B4F2F7191970044237A /* Debug */,
 				5A826B502F7191970044237A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5ABBF1FD2FADC71D00DB335D /* Build configuration list for PBXNativeTarget "StaffLankaGoWidgetExtensionExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5ABBF1FE2FADC71D00DB335D /* Debug */,
+				5ABBF1FF2FADC71D00DB335D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

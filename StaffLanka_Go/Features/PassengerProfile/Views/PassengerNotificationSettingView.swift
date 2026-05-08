@@ -1,7 +1,14 @@
+//
+//  PassengerNotificationSettingView.swift
+//  StaffLanka_Go
+//
+//  Created by Liviru Navaratna on 2026-05-08.
+//
+
 import SwiftUI
 import UserNotifications
 
-struct DriverNotificationSettingsView: View {
+struct PassengerNotificationSettingsView: View {
 
     @ObservedObject private var notificationManager = NotificationManager.shared
 
@@ -15,7 +22,7 @@ struct DriverNotificationSettingsView: View {
     }
 
     var body: some View {
-        Form {
+        List {
             inAppNotificationsSection
             bannerNotificationsSection
             alertTypesSection
@@ -40,7 +47,7 @@ struct DriverNotificationSettingsView: View {
                 }
             )) {
                 HStack(spacing: 12) {
-                    profileIconBadge(systemIconName: "bell.fill", badgeColor: Color.brandAccent)
+                    settingsIconBadge(systemIconName: "bell.fill", badgeColor: Color.brandAccent)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("In-App Notifications")
                             .font(.system(size: 15))
@@ -67,7 +74,7 @@ struct DriverNotificationSettingsView: View {
     private var bannerNotificationsSection: some View {
         Section {
             HStack(spacing: 12) {
-                profileIconBadge(
+                settingsIconBadge(
                     systemIconName: systemBannersAreAuthorized ? "bell.badge.fill" : "bell.slash.fill",
                     badgeColor: systemBannersAreAuthorized ? Color.statusActive : Color.statusDanger
                 )
@@ -118,12 +125,12 @@ struct DriverNotificationSettingsView: View {
                 }
             )) {
                 HStack(spacing: 12) {
-                    profileIconBadge(systemIconName: "bus.fill", badgeColor: Color.statusWarning)
+                    settingsIconBadge(systemIconName: "bus.fill", badgeColor: Color.statusWarning)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Trip Status Alerts")
+                        Text("Trip Alerts")
                             .font(.system(size: 15))
                             .foregroundColor(Color.textPrimary)
-                        Text("Trip started and completed notifications")
+                        Text("Trip started, completed and proximity alerts")
                             .font(.system(size: 12))
                             .foregroundColor(Color.textSecondary)
                     }
@@ -140,12 +147,12 @@ struct DriverNotificationSettingsView: View {
                 }
             )) {
                 HStack(spacing: 12) {
-                    profileIconBadge(systemIconName: "person.3.fill", badgeColor: Color.brandAccent)
+                    settingsIconBadge(systemIconName: "person.fill.checkmark", badgeColor: Color.brandAccent)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Passenger Boarding Alerts")
+                        Text("Account Alerts")
                             .font(.system(size: 15))
                             .foregroundColor(Color.textPrimary)
-                        Text("Login and passenger activity notifications")
+                        Text("Login confirmations and account activity")
                             .font(.system(size: 12))
                             .foregroundColor(Color.textSecondary)
                     }
@@ -157,14 +164,14 @@ struct DriverNotificationSettingsView: View {
             Text("Alert Types")
                 .foregroundColor(Color.textSecondary)
         } footer: {
-            Text("Control which categories of alerts you receive.")
+            Text("Control which categories of alerts you receive as notifications.")
                 .font(.system(size: 13))
                 .foregroundColor(Color.textTertiary)
                 .padding(.top, 4)
         }
     }
 
-    private func profileIconBadge(systemIconName: String, badgeColor: Color) -> some View {
+    private func settingsIconBadge(systemIconName: String, badgeColor: Color) -> some View {
         Image(systemName: systemIconName)
             .font(.system(size: 13, weight: .semibold))
             .foregroundColor(.white)
@@ -175,11 +182,11 @@ struct DriverNotificationSettingsView: View {
 }
 
 #Preview("Dark Mode") {
-    NavigationStack { DriverNotificationSettingsView() }
+    NavigationStack { PassengerNotificationSettingsView() }
         .preferredColorScheme(.dark)
 }
 
 #Preview("Light Mode") {
-    NavigationStack { DriverNotificationSettingsView() }
+    NavigationStack { PassengerNotificationSettingsView() }
         .preferredColorScheme(.light)
 }
