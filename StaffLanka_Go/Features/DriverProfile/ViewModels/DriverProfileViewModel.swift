@@ -8,6 +8,7 @@
 import SwiftUI
 import Combine
 import FirebaseAuth
+import FirebaseFirestore
 import PhotosUI
 import MapKit
  
@@ -97,11 +98,13 @@ final class DriverProfileViewModel: ObservableObject {
     }
  
     struct PassengerJoinRequest: Identifiable {
-        let id = UUID()
+        let id: String                 // Firestore document ID
         let passengerFullName: String
+        let passengerPhone: String
         let requestedPickupStopName: String
         let requestedDropOffLocationName: String
         let preferredSessionType: PassengerRequestSessionPreference
+        let noteFromPassenger: String
     }
  
     struct ActivePassengerEntry: Identifiable {
@@ -129,7 +132,7 @@ final class DriverProfileViewModel: ObservableObject {
         driverFullName:       "Loading...",
         driverPhoneNumber:    "Loading...",
         driverLicenseNumber:  "Loading...",
-        driverEmailAddress:   ""       // PHASE 1.2: New field with safe default
+        driverEmailAddress:   ""
     )
  
     @Published var driverAvailabilityStatusIsOnline: Bool = true {
@@ -206,6 +209,14 @@ final class DriverProfileViewModel: ObservableObject {
   
     private var currentDriverModel: DriverModel?
     private var currentRouteModel:  RouteModel?
+
+    // Stored as a nonisolated reference so deinit (which is nonisolated) can safely remove it.
+    private var _listenerRef: ListenerRegistration?
+    nonisolated(unsafe) private var _listenerBox: ListenerRegistration?
+
+    deinit {
+        _listenerBox?.remove()
+    }
  
     func fetchDriverProfile() {
         guard let userId = Auth.auth().currentUser?.uid else { return }
@@ -220,7 +231,7 @@ final class DriverProfileViewModel: ObservableObject {
                     driverFullName:      driver.fullName,
                     driverPhoneNumber:   user?.phoneNumber ?? "No Phone Number",
                     driverLicenseNumber: driver.licenseNumber,
-                    driverEmailAddress:  user?.emailAddress ?? ""   // PHASE 1.2
+                    driverEmailAddress:  user?.emailAddress ?? ""
                 )
  
                 self.busDetailsInformationValues = BusVehicleDetails(
@@ -236,7 +247,7 @@ final class DriverProfileViewModel: ObservableObject {
                 if let base64String = driver.profilePhotoBase64,
                    !base64String.isEmpty,
                    let imageData = Data(base64Encoded: base64String) {
-                    self.driverProfilePhotoImageData = imageData   // PHASE 1.3
+                    self.driverProfilePhotoImageData = imageData
                 }
  
                 do {
@@ -290,7 +301,11 @@ final class DriverProfileViewModel: ObservableObject {
                 }
  
                 self.isDataLoading = false
+
+                // Start listening for join requests once driver is loaded
+                self.listenForJoinRequests(driverId: userId)
             } catch {
+
                 self.driverProfileInformationValues.driverFullName = "Error Loading"
                 self.isDataLoading = false
             }
@@ -335,8 +350,6 @@ final class DriverProfileViewModel: ObservableObject {
                     if let userId = driverModel.id ?? Auth.auth().currentUser?.uid {
                         try await DriverService.shared.updateDriver(driverId: userId, updatedRecord: driverModel)
                         try await UserService.shared.updateUserRoleAndName(userId: userId, updatedRole: "driver", fullName: driverModel.fullName)
- 
-                        // PHASE 1.2: Also update the email address in the users document
                         try await UserService.shared.updateUserEmailAddress(
                             userId:       userId,
                             updatedEmailAddress: editingDriverEmailAddress
@@ -357,7 +370,6 @@ final class DriverProfileViewModel: ObservableObject {
     
     func processAndUploadSelectedProfilePhoto(selectedPhotoPickerItem item: PhotosPickerItem) {
         Task {
-            // Load raw data from the picker item
             guard let rawData = try? await item.loadTransferable(type: Data.self) else { return }
             guard let uiImage = UIImage(data: rawData) else { return }
             let compressed = uiImage.jpegData(compressionQuality: 0.25) ?? rawData
@@ -368,14 +380,11 @@ final class DriverProfileViewModel: ObservableObject {
             }
  
             let base64String = compressed.base64EncodedString()
+            self.driverProfilePhotoImageData = compressed
  
-            // Update local display immediately so the UI reflects the change
-            self.driverProfilePhotoImageData = compressed  // PHASE 1.3
- 
-            // Persist to Firestore via DriverService
             if var driverModel = self.currentDriverModel,
                let userId = driverModel.id ?? Auth.auth().currentUser?.uid {
-                driverModel.profilePhotoBase64 = base64String  // PHASE 1.3
+                driverModel.profilePhotoBase64 = base64String
                 do {
                     try await DriverService.shared.updateDriver(driverId: userId, updatedRecord: driverModel)
                     self.currentDriverModel = driverModel
@@ -632,12 +641,64 @@ final class DriverProfileViewModel: ObservableObject {
         }
     }
  
-    func acceptPassengerJoinRequest(requestIdentifier: UUID) {
-        passengerRequestsList.removeAll { $0.id == requestIdentifier }
+    // Join request listener
+
+    private func listenForJoinRequests(driverId: String) {
+        // Remove any existing listener before attaching a new one
+        _listenerBox?.remove()
+        _listenerBox = JoinRequestService.shared.listenForPendingRequests(driverId: driverId) { [weak self] models in
+            guard let self else { return }
+            Task { @MainActor in
+                let previousCount = self.passengerRequestsList.count
+                self.passengerRequestsList = models.compactMap { model in
+                    guard let docId = model.id else { return nil }
+                    let sessionPref: PassengerRequestSessionPreference
+                    switch model.session {
+                    case "Morning": sessionPref = .morningOnly
+                    case "Evening": sessionPref = .eveningOnly
+                    default:        sessionPref = .bothSessions
+                    }
+                    return PassengerJoinRequest(
+                        id: docId,
+                        passengerFullName:           model.passengerName,
+                        passengerPhone:              model.passengerPhone,
+                        requestedPickupStopName:     model.pickupStop,
+                        requestedDropOffLocationName: model.dropoffStop,
+                        preferredSessionType:        sessionPref,
+                        noteFromPassenger:           model.note
+                    )
+                }
+
+                // If the number of pending requests went up, someone just sent a new one
+                if models.count > previousCount {
+                    NotificationManager.shared.scheduleNotification(
+                        title: "New Join Request",
+                        body: "A passenger has requested to join your route.",
+                        isTripAlert: false
+                    )
+                }
+            }
+        }
+    }
+
+    func acceptPassengerJoinRequest(requestIdentifier: String) {
+        Task {
+            do {
+                try await JoinRequestService.shared.updateStatus(requestId: requestIdentifier, status: "accepted")
+            } catch {
+                print("🔴 [DriverProfileVM] Accept request failed: \(error.localizedDescription)")
+            }
+        }
     }
  
-    func rejectPassengerJoinRequest(requestIdentifier: UUID) {
-        passengerRequestsList.removeAll { $0.id == requestIdentifier }
+    func rejectPassengerJoinRequest(requestIdentifier: String) {
+        Task {
+            do {
+                try await JoinRequestService.shared.updateStatus(requestId: requestIdentifier, status: "rejected")
+            } catch {
+                print("🔴 [DriverProfileVM] Reject request failed: \(error.localizedDescription)")
+            }
+        }
     }
  
     func terminateActivePassenger(passengerIdentifier: UUID) {

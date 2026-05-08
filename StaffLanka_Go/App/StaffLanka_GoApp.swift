@@ -8,6 +8,7 @@
 import SwiftUI
 import Firebase
 import FirebaseAuth
+import CoreData
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     
@@ -46,6 +47,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 @main
 struct StaffLanka_GoApp: App {
     @StateObject private var authManager = AuthManager.shared
+    let persistenceController = PersistenceController.shared
     
     // register app delegate for Firebase setup
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
@@ -54,6 +56,7 @@ struct StaffLanka_GoApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(authManager)
+                .environment(\.managedObjectContext, persistenceController.container.viewContext)
         }
     }
 }

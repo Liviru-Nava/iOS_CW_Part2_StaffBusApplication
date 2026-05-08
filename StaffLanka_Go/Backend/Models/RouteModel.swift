@@ -59,17 +59,22 @@ struct RouteModel: Codable, Identifiable {
     var bothTripsPrice: Double?
     var pricePerTrip: Double?
     var routeCreatedAt: Date
+    var startName: String?
+    var endName: String?
 
     enum CodingKeys: String, CodingKey {
-        case ownerDriverId  = "driverId"
-        case startLocation  = "startingLocation"
-        case endLocation    = "endingLocation"
-        case routeStops     = "stops"
+        case id              = "id"
+        case ownerDriverId   = "driverId"
+        case startLocation   = "startingLocation"
+        case endLocation     = "endingLocation"
+        case routeStops      = "stops"
         case scheduleEntries = "schedule"
-        case morningPrice   = "morningPrice"
-        case eveningPrice   = "eveningPrice"
-        case bothTripsPrice = "bothTripsPrice"
-        case pricePerTrip   = "pricePerTrip"
-        case routeCreatedAt = "createdAt"
+        case morningPrice    = "morningPrice"
+        case eveningPrice    = "eveningPrice"
+        case bothTripsPrice  = "bothTripsPrice"
+        case pricePerTrip    = "pricePerTrip"
+        case routeCreatedAt  = "createdAt"
+        case startName       = "startName"
+        case endName         = "endName"
     }
 }

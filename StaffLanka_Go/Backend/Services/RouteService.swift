@@ -43,4 +43,35 @@ final class RouteService {
             .document(routeId)
             .setData(from: updatedRecord, merge: true)
     }
+
+    func fetchAllRoutes() async throws -> [RouteModel] {
+        print("🔵 [RouteService] fetchAllRoutes — querying '\(routesCollectionPath)' collection")
+        let snapshot = try await firestoreDatabase
+            .collection(routesCollectionPath)
+            .getDocuments()
+        print("🟢 [RouteService] fetchAllRoutes — got \(snapshot.documents.count) raw document(s)")
+
+        var decoded: [RouteModel] = []
+        for doc in snapshot.documents {
+            do {
+                let route = try doc.data(as: RouteModel.self)
+                print("   ✅ Decoded route \(doc.documentID): start='\(route.startLocation.locationName)' end='\(route.endLocation.locationName)' stops=\(route.routeStops.count) schedules=\(route.scheduleEntries.count)")
+                decoded.append(route)
+            } catch {
+                print("   ❌ Failed to decode route \(doc.documentID): \(error.localizedDescription)")
+                print("      Raw data keys: \(doc.data().keys.sorted())")
+            }
+        }
+        return decoded
+    }
+
+    func fetchRoutes(from startLocationName: String, to endLocationName: String) async throws -> [RouteModel] {
+        let snapshot = try await firestoreDatabase
+            .collection(routesCollectionPath)
+            .whereField("startName", isEqualTo: startLocationName)
+            .whereField("endName", isEqualTo: endLocationName)
+            .getDocuments()
+        return try snapshot.documents.compactMap { try $0.data(as: RouteModel.self) }
+    }
 }
+

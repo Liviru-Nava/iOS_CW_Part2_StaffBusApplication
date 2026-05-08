@@ -27,6 +27,9 @@ struct DriverTripHistoryView: View {
         .background(Color.appBackground)
         .navigationTitle("Trip History")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            tripHistoryViewModel.fetchHistory()
+        }
     }
 
     private var tripSummaryBanner: some View {
@@ -169,11 +172,11 @@ struct DriverTripHistoryCard: View {
     let tripRecord: DriverHistoryTripRecord
 
     private var sessionDisplayColor: Color {
-        tripRecord.sessionType == .morning ? Color.statusWarning : Color.brandAccent
+        tripRecord.sessionType == "Morning" ? Color.statusWarning : Color.brandAccent
     }
 
     private var sessionIconName: String {
-        tripRecord.sessionType == .morning ? "sunrise.fill" : "moon.fill"
+        tripRecord.sessionType == "Morning" ? "sunrise.fill" : "moon.fill"
     }
 
     private var completionStatusColor: Color {
@@ -194,7 +197,7 @@ struct DriverTripHistoryCard: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
-                        Text(tripRecord.sessionType == .morning ? "Morning Trip" : "Evening Trip")
+                        Text(tripRecord.sessionType == "Morning" ? "Morning Trip" : "Evening Trip")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Color.textPrimary)
                         completionStatusPill

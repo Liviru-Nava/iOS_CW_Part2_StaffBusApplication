@@ -13,5 +13,7 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>We need access to your location during the trip to provide turn-by-turn routing and update passengers of the bus location.</string>
 </dict>
 </plist>

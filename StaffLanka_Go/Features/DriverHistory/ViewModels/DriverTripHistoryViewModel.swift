@@ -6,45 +6,50 @@
 
 import Foundation
 import SwiftUI
+import FirebaseFirestore
+import FirebaseAuth
 import Combine
 
-enum DriverTripCompletionStatus: String {
+enum DriverTripCompletionStatus: String, Codable {
     case completed = "Completed"
     case autoCompleted = "Auto Completed"
 }
 
-enum DriverTripStopStatus {
-    case completed, skipped
+enum DriverTripStopStatus: String, Codable {
+    case completed = "completed"
+    case skipped = "skipped"
 }
 
 enum DriverTripDetailDisplayMode {
     case textView, mapView
 }
 
-struct DriverTripStopRecord: Identifiable {
-    let id = UUID()
+struct DriverTripStopRecord: Identifiable, Codable {
+    var id: String = UUID().uuidString
     let stopName: String
     let timeReached: String
     let stopStatus: DriverTripStopStatus
 }
 
-struct DriverTripPassengerPickupRecord: Identifiable {
-    let id = UUID()
+struct DriverTripPassengerPickupRecord: Identifiable, Codable {
+    var id: String = UUID().uuidString
     let passengerFullName: String
     let boardingStopName: String
 }
 
-struct DriverTripPerformanceSummary {
+struct DriverTripPerformanceSummary: Codable {
     let totalStopCount: Int
     let completedStopCount: Int
     let totalPassengersPickedUp: Int
     let tripDurationInMinutes: Int
 }
 
-struct DriverHistoryTripRecord: Identifiable {
-    let id = UUID()
+struct DriverHistoryTripRecord: Identifiable, Codable {
+    @DocumentID var id: String?
+    var driverId: String
+    var routeId: String
     let tripDate: Date
-    let sessionType: TripSession
+    let sessionType: String // e.g., "Morning", "Evening"
     let completionStatus: DriverTripCompletionStatus
     let scheduledStartTime: String
     let actualEndTime: String
@@ -59,8 +64,22 @@ final class DriverTripHistoryViewModel: ObservableObject {
     @Published var selectedTripForDetailView: DriverHistoryTripRecord? = nil
     @Published var selectedTripDetailDisplayMode: DriverTripDetailDisplayMode = .textView
     @Published var selectedDateRangeFilter: TripHistoryDateFilter = .last30Days
+    @Published var allTripRecords: [DriverHistoryTripRecord] = []
+    @Published var isLoading: Bool = false
 
-    let allTripRecords: [DriverHistoryTripRecord] = DriverHistoryTripRecord.mockDriverTrips
+    func fetchHistory() {
+        guard let userId = FirebaseAuth.Auth.auth().currentUser?.uid else { return }
+        self.isLoading = true
+        Task {
+            do {
+                let records = try await TripService.shared.fetchDriverTripHistory(driverId: userId)
+                self.allTripRecords = records
+            } catch {
+                print("🔴 Failed to fetch driver history: \(error.localizedDescription)")
+            }
+            self.isLoading = false
+        }
+    }
 
     var filteredTripRecords: [DriverHistoryTripRecord] {
         let now = Date()
@@ -118,6 +137,5 @@ final class DriverTripHistoryViewModel: ObservableObject {
 }
 
 extension DriverHistoryTripRecord {
-
     static let mockDriverTrips: [DriverHistoryTripRecord] = []
 }
