@@ -21,7 +21,8 @@ struct JoinRequestView: View {
         stops: [String],
         morningDepartureTime: Date,
         eveningDepartureTime: Date,
-        activeDays: [String]
+        activeDays: [String],
+        allowedSessions: [JoinRequestViewModel.TripSession] = JoinRequestViewModel.TripSession.allCases
     ) {
         _joinRequestViewModel = StateObject(wrappedValue: JoinRequestViewModel(
             pickupLocation:      pickupLocation,
@@ -32,7 +33,8 @@ struct JoinRequestView: View {
             stops:               stops,
             morningDepartureTime: morningDepartureTime,
             eveningDepartureTime: eveningDepartureTime,
-            activeDays:          activeDays
+            activeDays:          activeDays,
+            allowedSessions:     allowedSessions
         ))
     }
 
@@ -242,27 +244,45 @@ struct JoinRequestView: View {
 
     private func sessionChip(_ tripSession: JoinRequestViewModel.TripSession) -> some View {
         let isCurrentlySelected = joinRequestViewModel.selectedSession == tripSession
+        let isDisabledForPassenger = joinRequestViewModel.isSessionDisabled(tripSession)
         return Button {
-            joinRequestViewModel.selectedSession = tripSession
+            if !isDisabledForPassenger {
+                joinRequestViewModel.selectedSession = tripSession
+            }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: sessionIconName(tripSession))
+                Image(systemName: isDisabledForPassenger ? "lock.fill" : sessionIconName(tripSession))
                     .font(.system(size: 12))
                 Text(tripSession.rawValue)
                     .font(.system(size: 13, weight: .semibold))
             }
-            .foregroundStyle(isCurrentlySelected ? Color.brandPrimary : Color.textSecondary)
+            .foregroundStyle(
+                isDisabledForPassenger
+                    ? Color.textTertiary
+                    : (isCurrentlySelected ? Color.brandPrimary : Color.textSecondary)
+            )
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity)
-            .background(isCurrentlySelected ? Color.brandAccent : Color.cardBackground)
+            .background(
+                isDisabledForPassenger
+                    ? Color.cardBackground.opacity(0.5)
+                    : (isCurrentlySelected ? Color.brandAccent : Color.cardBackground)
+            )
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(isCurrentlySelected ? Color.clear : Color.divider, lineWidth: 1)
+                    .strokeBorder(
+                        isDisabledForPassenger
+                            ? Color.divider.opacity(0.4)
+                            : (isCurrentlySelected ? Color.clear : Color.divider),
+                        lineWidth: 1
+                    )
             )
+            .opacity(isDisabledForPassenger ? 0.45 : 1.0)
         }
         .buttonStyle(.plain)
+        .disabled(isDisabledForPassenger)
         .animation(.easeInOut(duration: 0.15), value: joinRequestViewModel.selectedSession)
     }
 

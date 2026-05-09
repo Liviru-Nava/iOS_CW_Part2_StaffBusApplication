@@ -19,10 +19,14 @@ final class JoinRequestViewModel: ObservableObject {
         case both    = "Both"
     }
 
+    // Which sessions the passenger is permitted to select for this request
+    // Computed from their current enrollment state before this sheet opens
+    let allowedSessions: [TripSession]
+
     // Form state
     @Published var selectedPickup: String
     @Published var selectedDestination: String
-    @Published var selectedSession: TripSession = .both
+    @Published var selectedSession: TripSession
     @Published var phone: String = ""
     @Published var name: String = ""
     @Published var note: String = ""
@@ -33,17 +37,13 @@ final class JoinRequestViewModel: ObservableObject {
     @Published var submitError: String? = nil
     @Published var showPickupPicker: Bool = false
     @Published var showDestinationPicker: Bool = false
-
-    // Tracks whether the calendar event scheduling completed after submission
     @Published var calendarEventSchedulingCompleted: Bool = false
 
-    // Route context (set by RouteDetailView)
+    // Route context
     let routeId: String
     let driverId: String
     let routeName: String
     let stops: [String]
-
-    // Schedule data passed in from RouteDetailView so EventKit can create events
     let routeMorningDepartureTime: Date
     let routeEveningDepartureTime: Date
     let routeActiveDays: [String]
@@ -57,27 +57,54 @@ final class JoinRequestViewModel: ObservableObject {
         stops: [String],
         morningDepartureTime: Date,
         eveningDepartureTime: Date,
-        activeDays: [String]
+        activeDays: [String],
+        allowedSessions: [TripSession]
     ) {
-        self.selectedPickup               = pickupLocation
-        self.selectedDestination          = destinationLocation
-        self.routeName                    = routeName
-        self.routeId                      = routeId
-        self.driverId                     = driverId
-        self.stops                        = stops
-        self.routeMorningDepartureTime    = morningDepartureTime
-        self.routeEveningDepartureTime    = eveningDepartureTime
-        self.routeActiveDays              = activeDays
+        self.selectedPickup            = pickupLocation
+        self.selectedDestination       = destinationLocation
+        self.routeName                 = routeName
+        self.routeId                   = routeId
+        self.driverId                  = driverId
+        self.stops                     = stops
+        self.routeMorningDepartureTime = morningDepartureTime
+        self.routeEveningDepartureTime = eveningDepartureTime
+        self.routeActiveDays           = activeDays
+        self.allowedSessions           = allowedSessions
+
+        // Default to the first allowed session
+        // If only one session is allowed, it is pre-selected and the chip is locked
+        self.selectedSession = allowedSessions.first ?? .both
+
+        // Auto-populate phone from stored session
+        let storedPhoneNumber = AuthManager.shared.storedPhoneNumber
+        if !storedPhoneNumber.isEmpty {
+            self.phone = storedPhoneNumber
+        }
+
+        // Auto-populate name only when it is a real name and not the default placeholder
+        let storedName: String = {
+            guard let userId = Auth.auth().currentUser?.uid else { return "" }
+            return CoreDataManager.shared.fetchPassengerProfile(userId: userId)?.fullName ?? ""
+        }()
+        let nameIsPlaceholder = storedName.trimmingCharacters(in: .whitespaces).lowercased() == "new user"
+        if !storedName.trimmingCharacters(in: .whitespaces).isEmpty && !nameIsPlaceholder {
+            self.name = storedName
+        }
+    }
+
+    // Whether a particular session chip should be disabled in the UI
+    func isSessionDisabled(_ session: TripSession) -> Bool {
+        !allowedSessions.contains(session)
     }
 
     var canSubmit: Bool {
         !phone.trimmingCharacters(in: .whitespaces).isEmpty &&
         !selectedPickup.isEmpty &&
         !selectedDestination.isEmpty &&
-        !isSubmitting
+        !isSubmitting &&
+        allowedSessions.contains(selectedSession)
     }
 
-    // Submit to Firestore, then schedule calendar reminders via EventKit
     func submitRequest() {
         guard canSubmit else { return }
         isSubmitting = true
@@ -98,20 +125,12 @@ final class JoinRequestViewModel: ObservableObject {
             createdAt:      Date()
         )
 
-        print("[JoinRequestViewModel] Submitting request — route: \(routeId) driver: \(driverId) passenger: \(authenticatedPassengerId ?? "anon")")
-
         Task {
             do {
                 let firestoreDocumentId = try await JoinRequestService.shared.submitRequest(joinRequestModelToSubmit)
                 print("[JoinRequestViewModel] Request submitted successfully, docId: \(firestoreDocumentId)")
-
-                withAnimation(.spring(response: 0.4)) {
-                    self.isSubmitted = true
-                }
-
-                // Schedule calendar reminders now that the request is successfully submitted
+                withAnimation(.spring(response: 0.4)) { self.isSubmitted = true }
                 await scheduleCalendarRemindersForApprovedSessions()
-
             } catch {
                 print("[JoinRequestViewModel] Submit failed: \(error.localizedDescription)")
                 self.submitError = "Could not send request. Please try again."
@@ -120,54 +139,27 @@ final class JoinRequestViewModel: ObservableObject {
         }
     }
 
-    // Determines which sessions the passenger selected and creates the appropriate calendar events
     private func scheduleCalendarRemindersForApprovedSessions() async {
-        print("[JoinRequestViewModel] scheduleCalendarRemindersForApprovedSessions called, session: \(selectedSession.rawValue)")
-
-        let pickupStopNameForCalendar = selectedPickup
-
         switch selectedSession {
         case .both:
             await EventKitManager.shared.schedulePassengerTripReminders(
-                routeId: routeId,
-                routeDisplayName: routeName,
-                passengerPickupStopName: pickupStopNameForCalendar,
+                routeId: routeId, routeDisplayName: routeName,
+                passengerPickupStopName: selectedPickup,
                 morningDepartureTime: routeMorningDepartureTime,
                 eveningDepartureTime: routeEveningDepartureTime,
                 routeActiveDays: routeActiveDays
             )
-
         case .morning:
-            // For morning-only: still call the shared method but pass morning time for both slots.
-            // The manager handles one event per call — we pass the same time to avoid creating an evening event.
-            await schedulePassengerSingleSessionReminder(
-                sessionLabel: "Morning",
-                sessionDepartureTime: routeMorningDepartureTime,
-                pickupStopName: pickupStopNameForCalendar
-            )
-
+            await schedulePassengerSingleSessionReminder(sessionLabel: "Morning", sessionDepartureTime: routeMorningDepartureTime, pickupStopName: selectedPickup)
         case .evening:
-            await schedulePassengerSingleSessionReminder(
-                sessionLabel: "Evening",
-                sessionDepartureTime: routeEveningDepartureTime,
-                pickupStopName: pickupStopNameForCalendar
-            )
+            await schedulePassengerSingleSessionReminder(sessionLabel: "Evening", sessionDepartureTime: routeEveningDepartureTime, pickupStopName: selectedPickup)
         }
-
         calendarEventSchedulingCompleted = true
-        print("[JoinRequestViewModel] Calendar reminder scheduling finished for session: \(selectedSession.rawValue)")
     }
 
-    // Creates a single-session calendar reminder directly via EventKitManager's granular helper.
-    // This avoids creating an unwanted second event when the passenger selected morning or evening only.
-    private func schedulePassengerSingleSessionReminder(
-        sessionLabel: String,
-        sessionDepartureTime: Date,
-        pickupStopName: String
-    ) async {
+    private func schedulePassengerSingleSessionReminder(sessionLabel: String, sessionDepartureTime: Date, pickupStopName: String) async {
         await EventKitManager.shared.schedulePassengerTripReminders(
-            routeId: routeId,
-            routeDisplayName: routeName,
+            routeId: routeId, routeDisplayName: routeName,
             passengerPickupStopName: pickupStopName,
             morningDepartureTime: sessionDepartureTime,
             eveningDepartureTime: sessionDepartureTime,

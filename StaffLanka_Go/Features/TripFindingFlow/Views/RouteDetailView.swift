@@ -17,8 +17,41 @@ struct RouteDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var routeDetailViewModel: RouteDetailViewModel
     @State private var showJoinSheet = false
-    @State private var showAllReviews = false
     @State private var showFullMap = false
+    @State private var showEnrollmentRestrictionAlert = false
+    @State private var enrollmentRestrictionAlertMessage = ""
+    @StateObject private var enrollmentCheckViewModel = PassengerEnrolledServicesViewModel()
+
+    // Computed from enrollmentCheckViewModel — updated via onChange observers
+    @State private var passengerHasBothEnrollmentActive = false
+    @State private var passengerHasMorningActive = false
+    @State private var passengerHasEveningActive = false
+
+    // The sessions this passenger is allowed to select when requesting this route
+    // nil means not yet computed (loading)
+    private var allowedSessionsForThisRequest: [JoinRequestViewModel.TripSession] {
+        if passengerHasBothEnrollmentActive { return [] }
+        if passengerHasMorningActive && passengerHasEveningActive { return [] }
+        if passengerHasMorningActive  { return [.evening] }
+        if passengerHasEveningActive  { return [.morning] }
+        return [.morning, .evening, .both]
+    }
+
+    // True when the passenger cannot request any more sessions at all
+    private var passengerIsFullyEnrolled: Bool {
+        passengerHasBothEnrollmentActive || (passengerHasMorningActive && passengerHasEveningActive)
+    }
+
+    // The alert message shown when the passenger is blocked from requesting
+    private var enrollmentBlockMessage: String {
+        if passengerHasBothEnrollmentActive {
+            return "You are enrolled in a Morning & Evening (Both) service. Cancel your existing service first if you want to join a different one."
+        }
+        if passengerHasMorningActive && passengerHasEveningActive {
+            return "You already have active Morning and Evening sessions. Cancel one of your existing sessions first before requesting a new one."
+        }
+        return ""
+    }
 
     init(route: PassengerRouteResult, pickupLocation: String, destinationLocation: String) {
         self.route = route
@@ -73,20 +106,32 @@ struct RouteDetailView: View {
                 stops:                routeDetailViewModel.mapStops.map { $0.name },
                 morningDepartureTime: route.morningDeparture,
                 eveningDepartureTime: route.eveningDeparture,
-                activeDays:           route.activeDays
+                activeDays:           route.activeDays,
+                allowedSessions:      allowedSessionsForThisRequest
             )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(20)
-        }
-        .sheet(isPresented: $showAllReviews) {
-            AllReviewsSheet()
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(20)
         }
         .fullScreenCover(isPresented: $showFullMap) {
             FullRouteMapView(stops: routeDetailViewModel.mapStops, tripType: routeDetailViewModel.selectedTrip)
+        }
+        .onAppear {
+            enrollmentCheckViewModel.startListening()
+        }
+        .onChange(of: enrollmentCheckViewModel.hasBothEnrollmentActive) { _, value in
+            passengerHasBothEnrollmentActive = value
+        }
+        .onChange(of: enrollmentCheckViewModel.hasMorningActive) { _, value in
+            passengerHasMorningActive = value
+        }
+        .onChange(of: enrollmentCheckViewModel.hasEveningActive) { _, value in
+            passengerHasEveningActive = value
+        }
+        .alert("Enrollment Restricted", isPresented: $showEnrollmentRestrictionAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(enrollmentRestrictionAlertMessage)
         }
     }
 
@@ -98,7 +143,6 @@ struct RouteDetailView: View {
                 tripDetailsSection
                 pricingSection
                 stopsSection
-                reviewsSection
                 Color.clear.frame(height: 20)
             }
             .padding(.horizontal, 20)
@@ -397,38 +441,6 @@ struct RouteDetailView: View {
         }
     }
 
-    private var reviewsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Passenger Reviews")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.textPrimary)
-
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.statusWarning.opacity(0.12))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "star.slash.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(Color.statusWarning)
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("No Reviews Yet")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.textPrimary)
-                    Text("This driver hasn't received any reviews from passengers yet.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.textSecondary)
-                }
-                Spacer()
-            }
-            .padding(14)
-            .background(Color.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.divider, lineWidth: 1))
-        }
-    }
-
     private var bottomBar: some View {
         VStack(spacing: 0) {
             Divider().background(Color.divider)
@@ -445,22 +457,29 @@ struct RouteDetailView: View {
                 Spacer()
 
                 Button {
-                    showJoinSheet = true
+                    if passengerIsFullyEnrolled {
+                        enrollmentRestrictionAlertMessage = enrollmentBlockMessage
+                        showEnrollmentRestrictionAlert = true
+                    } else if !route.isAcceptingRequests {
+                        // button is disabled, no action needed
+                    } else {
+                        showJoinSheet = true
+                    }
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "paperplane.fill")
+                        Image(systemName: passengerIsFullyEnrolled ? "lock.fill" : "paperplane.fill")
                             .font(.system(size: 13))
-                        Text("Request to Join")
+                        Text(passengerIsFullyEnrolled ? "Already Enrolled" : "Request to Join")
                             .font(.system(size: 15, weight: .semibold))
                     }
                     .foregroundStyle(Color.brandPrimary)
                     .padding(.horizontal, 22)
                     .padding(.vertical, 14)
-                    .background(route.isAcceptingRequests ? Color.brandAccent : Color.statusInactive)
+                    .background(route.isAcceptingRequests && !passengerIsFullyEnrolled ? Color.brandAccent : Color.statusInactive)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
                 .buttonStyle(.plain)
-                .disabled(!route.isAcceptingRequests)
+                .disabled(!route.isAcceptingRequests && !passengerIsFullyEnrolled)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
@@ -469,138 +488,7 @@ struct RouteDetailView: View {
     }
 }
 
-// ReviewCard, AllReviewsSheet, FullRouteMapView, and MapStop are defined below.
-// They were originally co-located in this file and must remain here to stay in scope.
-
-struct ReviewCard: View {
-    let name: String
-    let rating: Int
-    let date: String
-    let comment: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(Color.brandAccent.opacity(0.15))
-                        .frame(width: 34, height: 34)
-                    Text(String(name.prefix(1)))
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Color.brandAccent)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.textPrimary)
-                    Text(date)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.textTertiary)
-                }
-                Spacer()
-                HStack(spacing: 2) {
-                    ForEach(0..<5, id: \.self) { starIndex in
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(starIndex < rating ? Color.statusWarning : Color.divider)
-                    }
-                }
-            }
-            Text(comment)
-                .font(.system(size: 13))
-                .foregroundStyle(Color.textSecondary)
-                .lineLimit(3)
-                .lineSpacing(3)
-        }
-        .padding(14)
-        .frame(width: 260)
-        .background(Color.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.divider, lineWidth: 1))
-    }
-}
-
-struct AllReviewsSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
-    private let allPassengerReviews: [(name: String, rating: Int, date: String, comment: String)] = [
-        ("Kamal P.", 5, "2 days ago", "Great driver, always on time and safe driving. Highly recommend this service."),
-        ("Sarah W.", 4, "1 week ago", "Comfortable seats. AC could be slightly cooler sometimes, but overall decent."),
-        ("Nuwan J.", 5, "3 weeks ago", "Very reliable daily commute. Doesn't miss any stops and communicates delays."),
-        ("Amila D.", 5, "1 month ago", "Excellent service. The bus is always clean."),
-        ("Kasun M.", 3, "2 months ago", "Good, but sometimes arrives 5 mins late."),
-    ]
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.appBackground.ignoresSafeArea()
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 20) {
-                        reviewsList
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 24)
-                }
-            }
-            .navigationTitle("Passenger Reviews")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(Color.brandAccent)
-                }
-            }
-        }
-    }
-
-    private var reviewsList: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(allPassengerReviews.enumerated()), id: \.offset) { reviewIndex, review in
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 10) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.brandAccent.opacity(0.15))
-                                .frame(width: 36, height: 36)
-                            Text(String(review.name.prefix(1)))
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(Color.brandAccent)
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(review.name)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(Color.textPrimary)
-                            Text(review.date)
-                                .font(.system(size: 11))
-                                .foregroundStyle(Color.textTertiary)
-                        }
-                        Spacer()
-                        HStack(spacing: 2) {
-                            ForEach(0..<5, id: \.self) { starIndex in
-                                Image(systemName: "star.fill")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(starIndex < review.rating ? Color.statusWarning : Color.divider)
-                            }
-                        }
-                    }
-                    Text(review.comment)
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.textSecondary)
-                        .lineSpacing(3)
-                }
-                .padding(.vertical, 16)
-
-                if reviewIndex < allPassengerReviews.count - 1 {
-                    Divider().background(Color.divider)
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .background(Color.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-    }
-}
+// FullRouteMapView and MapStop are kept here for scope compatibility
 
 struct FullRouteMapView: View {
     let stops: [PassengerStop]

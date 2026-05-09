@@ -8,20 +8,19 @@
 
 import SwiftUI
 import PhotosUI
- 
+
 struct DriverProfileView: View {
- 
+
     @StateObject private var driverProfileViewModel = DriverProfileViewModel()
     @ObservedObject private var authManager = AuthManager.shared
     @State private var showSignOutConfirmationAlert: Bool = false
- 
+
     var body: some View {
         List {
             profileHeaderSection
             serviceSection
             busRouteSection
             passengersSection
-            reviewsSection
             settingsSection
         }
         .listStyle(.insetGrouped)
@@ -36,14 +35,14 @@ struct DriverProfileView: View {
         .sheet(isPresented: $driverProfileViewModel.isEditingDriverProfile) {
             DriverEditProfileSheet(driverProfileViewModel: driverProfileViewModel)
         }
-        // Sign Out confirmation
+        // Sign Out confirmation alert
         .alert("Sign Out", isPresented: $showSignOutConfirmationAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Sign Out", role: .destructive) { driverProfileViewModel.signOut() }
         } message: {
             Text("Are you sure you want to sign out?")
         }
-        // Remove Local Data — confirmation
+        // Remove Local Data confirmation alert
         .alert("Remove Local Data", isPresented: $driverProfileViewModel.showRemoveLocalDataConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Remove", role: .destructive) {
@@ -52,16 +51,50 @@ struct DriverProfileView: View {
         } message: {
             Text("This will remove all locally cached profile information, trip history, and notifications stored on this device. Your account and data on the server will not be affected.")
         }
-        // Remove Local Data — success
+        // Remove Local Data success alert
         .alert("Local Data Removed", isPresented: $driverProfileViewModel.localDataRemoved) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("All locally stored data has been cleared from this device.")
         }
+        // Delete Account confirmation alert
+        .alert("Delete Account", isPresented: $driverProfileViewModel.showDeleteAccountConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete My Account", role: .destructive) {
+                driverProfileViewModel.deleteAccount()
+            }
+        } message: {
+            Text("This will permanently delete your account, all your trip history, assigned routes, and passenger data. This action cannot be undone.")
+        }
+        // Delete Account error alert
+        .alert("Deletion Failed", isPresented: $driverProfileViewModel.showDeleteAccountError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(driverProfileViewModel.deleteAccountError ?? "An unexpected error occurred. Please try again.")
+        }
+        // Deletion in-progress loading overlay
+        .overlay {
+            if driverProfileViewModel.isDeletingAccount {
+                ZStack {
+                    Color.black.opacity(0.45)
+                        .ignoresSafeArea()
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(.white)
+                            .scaleEffect(1.4)
+                        Text("Deleting account…")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                    .padding(32)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+                }
+            }
+        }
     }
- 
-    //Profile Header
- 
+
+    // Profile Header section showing driver avatar, name, phone, license
     private var profileHeaderSection: some View {
         Section {
             Button {
@@ -69,7 +102,7 @@ struct DriverProfileView: View {
             } label: {
                 HStack(spacing: 14) {
                     driverProfileAvatarDisplayView(diameter: 58, initialsFont: .system(size: 20, weight: .bold))
- 
+
                     VStack(alignment: .leading, spacing: 3) {
                         Text(driverProfileViewModel.driverProfileInformationValues.driverFullName)
                             .font(.system(size: 16, weight: .semibold))
@@ -86,26 +119,17 @@ struct DriverProfileView: View {
                                 .foregroundColor(.textTertiary)
                         }
                     }
- 
+
                     Spacer()
- 
-                    VStack(alignment: .trailing, spacing: 4) {
-                        HStack(spacing: 3) {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(.statusWarning)
-                            Text(String(format: "%.1f", driverProfileViewModel.averageDriverRatingValue))
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(.textPrimary)
-                        }
-                        Text("Driver")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.brandAccent)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 2)
-                            .background(Color.brandAccent.opacity(0.12))
-                            .clipShape(Capsule())
-                    }
+
+                    // Driver role badge
+                    Text("Driver")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.brandAccent)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Color.brandAccent.opacity(0.12))
+                        .clipShape(Capsule())
                 }
                 .padding(.vertical, 6)
             }
@@ -113,7 +137,8 @@ struct DriverProfileView: View {
             .listRowBackground(Color.cardBackground)
         }
     }
- 
+
+    // Renders the driver avatar — shows the stored photo if available, otherwise initials
     @ViewBuilder
     func driverProfileAvatarDisplayView(diameter: CGFloat, initialsFont: Font) -> some View {
         if let profilePhotoData = driverProfileViewModel.driverProfilePhotoImageData,
@@ -134,9 +159,8 @@ struct DriverProfileView: View {
                 )
         }
     }
- 
-    //Sections
- 
+
+    // Service status section
     private var serviceSection: some View {
         Section("Service") {
             NavigationLink {
@@ -152,7 +176,8 @@ struct DriverProfileView: View {
             .listRowBackground(Color.cardBackground)
         }
     }
- 
+
+    // Bus and route section
     private var busRouteSection: some View {
         Section("Bus & Route") {
             NavigationLink {
@@ -168,7 +193,8 @@ struct DriverProfileView: View {
             .listRowBackground(Color.cardBackground)
         }
     }
- 
+
+    // Passengers section for join requests and passenger management
     private var passengersSection: some View {
         Section("Passengers") {
             NavigationLink {
@@ -184,7 +210,7 @@ struct DriverProfileView: View {
                 )
             }
             .listRowBackground(Color.cardBackground)
- 
+
             NavigationLink {
                 DriverPassengerManagementView(driverProfileViewModel: driverProfileViewModel)
             } label: {
@@ -198,23 +224,8 @@ struct DriverProfileView: View {
             .listRowBackground(Color.cardBackground)
         }
     }
- 
-    private var reviewsSection: some View {
-        Section("Feedback") {
-            NavigationLink {
-                DriverReviewsView(driverProfileViewModel: driverProfileViewModel)
-            } label: {
-                profileListRow(
-                    iconName: "star.bubble.fill",
-                    iconBadgeColor: Color.statusWarning,
-                    rowTitle: "Passenger Reviews",
-                    rowSubtitle: "\(driverProfileViewModel.driverReviewsList.count) reviews · \(String(format: "%.1f", driverProfileViewModel.averageDriverRatingValue)) avg"
-                )
-            }
-            .listRowBackground(Color.cardBackground)
-        }
-    }
- 
+
+    // Settings section with notification settings, biometrics, local data, sign out and delete account
     private var settingsSection: some View {
         Section(
             header: Text("Settings"),
@@ -224,32 +235,20 @@ struct DriverProfileView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.top, 8)
         ) {
-            Button {} label: {
-                profileListRow(iconName: "lock.shield.fill", iconBadgeColor: Color.brandSecondary, rowTitle: "Privacy Settings", rowSubtitle: nil)
-            }
-            .buttonStyle(.plain)
-            .listRowBackground(Color.cardBackground)
- 
             NavigationLink {
                 DriverNotificationSettingsView()
             } label: {
                 profileListRow(iconName: "bell.badge.fill", iconBadgeColor: Color.statusWarning, rowTitle: "Notification Settings", rowSubtitle: nil)
             }
             .listRowBackground(Color.cardBackground)
- 
-            Button {} label: {
-                profileListRow(iconName: "questionmark.circle.fill", iconBadgeColor: Color.statusInfo, rowTitle: "Help & Support", rowSubtitle: nil)
-            }
-            .buttonStyle(.plain)
-            .listRowBackground(Color.cardBackground)
- 
-            // Face ID / Touch ID toggle — only shown when the device supports biometrics
+
+            // Face ID / Touch ID toggle shown only when biometrics are supported on the device
             if BiometricService.shared.deviceSupportsBiometricAuthentication {
                 biometricToggleRow
                     .listRowBackground(Color.cardBackground)
             }
- 
-            // Remove Local Data
+
+            // Remove Local Data button
             Button {
                 driverProfileViewModel.showRemoveLocalDataConfirm = true
             } label: {
@@ -257,7 +256,8 @@ struct DriverProfileView: View {
             }
             .buttonStyle(.plain)
             .listRowBackground(Color.cardBackground)
- 
+
+            // Sign Out button
             Button(role: .destructive) {
                 showSignOutConfirmationAlert = true
             } label: {
@@ -270,12 +270,25 @@ struct DriverProfileView: View {
                 .padding(.vertical, 2)
             }
             .listRowBackground(Color.cardBackground)
+
+            // Delete Account button
+            Button(role: .destructive) {
+                driverProfileViewModel.showDeleteAccountConfirm = true
+            } label: {
+                HStack(spacing: 12) {
+                    profileIconBadge(systemIconName: "trash.fill", badgeColor: .statusDanger)
+                    Text("Delete Account")
+                        .font(.system(size: 15))
+                        .foregroundColor(.statusDanger)
+                }
+                .padding(.vertical, 2)
+            }
+            .listRowBackground(Color.cardBackground)
         }
     }
- 
-    //A toggle row that enables or disables biometric sign-in.
-    //Turning it ON triggers a live Face ID challenge to confirm hardware consent
-    //before the preference is persisted. Turning it OFF simply clears the flag.
+
+    // Biometric toggle row that enables or disables Face ID / Touch ID sign-in
+    // Enabling triggers a live biometric challenge before persisting the preference
     private var biometricToggleRow: some View {
         HStack(spacing: 12) {
             profileIconBadge(systemIconName: "faceid", badgeColor: Color.brandAccent)
@@ -287,13 +300,13 @@ struct DriverProfileView: View {
             Spacer()
             Toggle("", isOn: Binding(
                 get: { authManager.isBiometricEnabled },
-                set: { newValue in
-                    if newValue {
+                set: { newBiometricToggleValue in
+                    if newBiometricToggleValue {
                         Task {
-                            let succeeded = await BiometricService.shared.authenticateWithBiometrics(
+                            let biometricAuthenticationSucceeded = await BiometricService.shared.authenticateWithBiometrics(
                                 reasonMessage: "Verify your identity to enable \(BiometricService.shared.biometricTypeDisplayName) sign-in"
                             )
-                            if succeeded {
+                            if biometricAuthenticationSucceeded {
                                 authManager.enableBiometric()
                             }
                         }
@@ -307,9 +320,8 @@ struct DriverProfileView: View {
         }
         .padding(.vertical, 2)
     }
- 
-    //Reusable Row Helper
- 
+
+    // Reusable row helper for list rows with icon badge, title and optional subtitle
     private func profileListRow(iconName: String, iconBadgeColor: Color, rowTitle: String, rowSubtitle: String?) -> some View {
         HStack(spacing: 12) {
             profileIconBadge(systemIconName: iconName, badgeColor: iconBadgeColor)
@@ -327,9 +339,9 @@ struct DriverProfileView: View {
         .padding(.vertical, 2)
     }
 }
- 
-//Icon Badge (file-scope helper, unchanged)
- 
+
+// File-scope icon badge helper used by multiple profile views
+
 func profileIconBadge(systemIconName: String, badgeColor: Color) -> some View {
     Image(systemName: systemIconName)
         .font(.system(size: 13, weight: .semibold))
@@ -338,13 +350,13 @@ func profileIconBadge(systemIconName: String, badgeColor: Color) -> some View {
         .background(badgeColor)
         .clipShape(RoundedRectangle(cornerRadius: 7))
 }
- 
-//Edit Profile Sheet (unchanged)
- 
+
+// Edit Profile Sheet for driver name, email and license
+
 struct DriverEditProfileSheet: View {
     @ObservedObject var driverProfileViewModel: DriverProfileViewModel
     @Environment(\.dismiss) private var dismissSheet
- 
+
     var body: some View {
         NavigationStack {
             List {
@@ -378,9 +390,10 @@ struct DriverEditProfileSheet: View {
                     }
                     .listRowBackground(Color.clear)
                 }
- 
+
                 Section("Personal Information") {
                     editSheetTextField(fieldLabel: "Full Name", iconName: "person.fill", boundValue: $driverProfileViewModel.editingDriverFullName, keyboardType: .default)
+                        .listRowBackground(Color.cardBackground)
                     NavigationLink {
                         DriverChangePhoneView(driverProfileViewModel: driverProfileViewModel)
                     } label: {
@@ -399,8 +412,11 @@ struct DriverEditProfileSheet: View {
                             }
                         }
                     }
+                    .listRowBackground(Color.cardBackground)
                     editSheetTextField(fieldLabel: "Email Address", iconName: "envelope.fill", boundValue: $driverProfileViewModel.editingDriverEmailAddress, keyboardType: .emailAddress)
+                        .listRowBackground(Color.cardBackground)
                     editSheetTextField(fieldLabel: "License Number", iconName: "creditcard.fill", boundValue: $driverProfileViewModel.editingDriverLicenseNumber, keyboardType: .default)
+                        .listRowBackground(Color.cardBackground)
                 }
             }
             .listStyle(.insetGrouped)
@@ -421,7 +437,8 @@ struct DriverEditProfileSheet: View {
             }
         }
     }
- 
+
+    // Avatar view shown in the edit sheet — photo if available, otherwise gradient initials circle
     @ViewBuilder
     private var driverProfileEditSheetAvatarView: some View {
         if let profilePhotoData = driverProfileViewModel.driverProfilePhotoImageData,
@@ -442,7 +459,7 @@ struct DriverEditProfileSheet: View {
                 )
         }
     }
- 
+
     private func editSheetTextField(fieldLabel: String, iconName: String, boundValue: Binding<String>, keyboardType: UIKeyboardType) -> some View {
         HStack(spacing: 12) {
             Image(systemName: iconName)
@@ -457,13 +474,11 @@ struct DriverEditProfileSheet: View {
         }
     }
 }
- 
-//Edit Bus Details Sheet (unchanged)
- 
+
 struct DriverEditBusDetailsSheet: View {
     @ObservedObject var driverProfileViewModel: DriverProfileViewModel
     @Environment(\.dismiss) private var dismissSheet
- 
+
     var body: some View {
         NavigationStack {
             List {
@@ -482,7 +497,7 @@ struct DriverEditBusDetailsSheet: View {
                     }
                     .listRowBackground(Color.clear)
                 }
- 
+
                 Section("Vehicle Information") {
                     busEditField(fieldLabel: "Plate Number", iconName: "number", boundValue: $driverProfileViewModel.editingBusPlateNumber, keyboardType: .default)
                     busEditField(fieldLabel: "Bus Name", iconName: "bus", boundValue: $driverProfileViewModel.editingBusDisplayName, keyboardType: .default)
@@ -507,7 +522,7 @@ struct DriverEditBusDetailsSheet: View {
             }
         }
     }
- 
+
     private func busEditField(fieldLabel: String, iconName: String, boundValue: Binding<String>, keyboardType: UIKeyboardType) -> some View {
         HStack(spacing: 12) {
             Image(systemName: iconName)
@@ -522,13 +537,13 @@ struct DriverEditBusDetailsSheet: View {
         }
     }
 }
- 
-//Edit Pricing Sheet (unchanged)
- 
+
+// Edit Pricing Sheet
+
 struct DriverEditPricingSheet: View {
     @ObservedObject var driverProfileViewModel: DriverProfileViewModel
     @Environment(\.dismiss) private var dismissSheet
- 
+
     var body: some View {
         NavigationStack {
             List {
@@ -547,7 +562,7 @@ struct DriverEditPricingSheet: View {
                     }
                     .listRowBackground(Color.clear)
                 }
- 
+
                 Section("Monthly Fees") {
                     pricingEditField(fieldLabel: "Morning Only (Rs.)", iconName: "sunrise.fill", iconColor: .statusWarning, boundValue: $driverProfileViewModel.editingMorningOnlyFee)
                     pricingEditField(fieldLabel: "Evening Only (Rs.)", iconName: "sunset.fill", iconColor: Color(hex: "#FF7B54"), boundValue: $driverProfileViewModel.editingEveningOnlyFee)
@@ -572,7 +587,7 @@ struct DriverEditPricingSheet: View {
             }
         }
     }
- 
+
     private func pricingEditField(fieldLabel: String, iconName: String, iconColor: Color, boundValue: Binding<String>) -> some View {
         HStack(spacing: 12) {
             Image(systemName: iconName)
@@ -587,16 +602,16 @@ struct DriverEditPricingSheet: View {
         }
     }
 }
- 
-//Previews
- 
+
+// Previews
+
 #Preview("Dark Mode") {
     NavigationStack {
         DriverProfileView()
     }
     .preferredColorScheme(.dark)
 }
- 
+
 #Preview("Light Mode") {
     NavigationStack {
         DriverProfileView()
