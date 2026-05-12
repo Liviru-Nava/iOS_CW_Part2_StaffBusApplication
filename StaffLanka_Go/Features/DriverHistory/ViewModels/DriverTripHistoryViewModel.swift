@@ -75,7 +75,7 @@ final class DriverTripHistoryViewModel: ObservableObject {
                 let records = try await TripService.shared.fetchDriverTripHistory(driverId: userId)
                 self.allTripRecords = records
             } catch {
-                print("🔴 Failed to fetch driver history: \(error.localizedDescription)")
+                print(" Failed to fetch driver history: \(error.localizedDescription)")
             }
             self.isLoading = false
         }

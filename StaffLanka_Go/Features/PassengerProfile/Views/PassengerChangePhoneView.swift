@@ -1,15 +1,18 @@
-// DriverChangePhoneView.swift
-// StaffLanka_Go
 //
-//  Created by Liviru Navaratna on 2026-04-10.
+//  PassengerChangePhoneView.swift
+//  StaffLanka_Go
 //
+//  Created by Liviru Navaratna on 2026-05-09.
+//
+
 
 import SwiftUI
 
-struct DriverChangePhoneView: View {
+// Two-screen flow for changing the passenger phone number, mirrors DriverChangePhoneView exactly
+struct PassengerChangePhoneView: View {
 
-    @ObservedObject var driverProfileViewModel: DriverProfileViewModel
-    @StateObject private var changePhoneViewModel = DriverChangePhoneViewModel()
+    @ObservedObject var passengerProfileViewModel: PassengerProfileViewModel
+    @StateObject private var changePhoneViewModel = PassengerChangePhoneViewModel()
     @FocusState private var isPhoneInputFieldFocused: Bool
     @Environment(\.dismiss) private var dismissToProfileSheet
 
@@ -32,10 +35,10 @@ struct DriverChangePhoneView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(false)
         .navigationDestination(isPresented: $changePhoneViewModel.shouldNavigateToOTPConfirmationScreen) {
-            DriverConfirmPhoneOTPView(
+            PassengerConfirmPhoneOTPView(
                 newPhoneNumberBeingVerified: changePhoneViewModel.fullPhoneNumberWithCountryCodePrefix,
                 changePhoneViewModel: changePhoneViewModel,
-                driverProfileViewModel: driverProfileViewModel
+                passengerProfileViewModel: passengerProfileViewModel
             )
         }
         .onTapGesture {
@@ -157,14 +160,14 @@ struct DriverChangePhoneView: View {
     }
 }
 
-// Confirmation screen where the driver enters the OTP sent to their new number
-struct DriverConfirmPhoneOTPView: View {
+// OTP confirmation screen where the passenger enters the 6-digit code
+struct PassengerConfirmPhoneOTPView: View {
 
     let newPhoneNumberBeingVerified: String
-    @ObservedObject var changePhoneViewModel: DriverChangePhoneViewModel
-    @ObservedObject var driverProfileViewModel: DriverProfileViewModel
+    @ObservedObject var changePhoneViewModel: PassengerChangePhoneViewModel
+    @ObservedObject var passengerProfileViewModel: PassengerProfileViewModel
 
-    @State private var otpDigitsEnteredByDriver: [String] = Array(repeating: "", count: 6)
+    @State private var otpDigitsEnteredByPassenger: [String] = Array(repeating: "", count: 6)
     @State private var otpVerificationShakeOffset: CGFloat = 0
     @State private var otpVerificationCountdownSeconds: Int = 30
     @State private var isVerifyingEnteredOTPCode: Bool = false
@@ -173,7 +176,7 @@ struct DriverConfirmPhoneOTPView: View {
     @FocusState private var isHiddenOTPInputFocused: Bool
     @Environment(\.dismiss) private var dismissToPhoneEntryScreen
 
-    var enteredOTPCodeJoined: String { otpDigitsEnteredByDriver.joined() }
+    var enteredOTPCodeJoined: String { otpDigitsEnteredByPassenger.joined() }
     var isEnteredOTPCodeComplete: Bool { enteredOTPCodeJoined.count == 6 }
     var canResendOTPCode: Bool { otpVerificationCountdownSeconds == 0 }
 
@@ -239,7 +242,7 @@ struct DriverConfirmPhoneOTPView: View {
     private var otpDigitBoxesRow: some View {
         HStack(spacing: 10) {
             ForEach(0..<6, id: \.self) { digitIndex in
-                phoneOTPDigitBox(digitIndex: digitIndex)
+                passengerOTPDigitBox(digitIndex: digitIndex)
                     .onTapGesture {
                         isHiddenOTPInputFocused = true
                     }
@@ -247,7 +250,7 @@ struct DriverConfirmPhoneOTPView: View {
         }
     }
 
-    private func phoneOTPDigitBox(digitIndex: Int) -> some View {
+    private func passengerOTPDigitBox(digitIndex: Int) -> some View {
         let digitCharacter: String = {
             let characters = Array(enteredOTPCodeJoined)
             return digitIndex < characters.count ? String(characters[digitIndex]) : ""
@@ -279,7 +282,7 @@ struct DriverConfirmPhoneOTPView: View {
             set: { newInputValue in
                 let digitsOnlyFromInput = String(newInputValue.filter(\.isNumber).prefix(6))
                 for digitIndex in 0..<6 {
-                    otpDigitsEnteredByDriver[digitIndex] = digitIndex < digitsOnlyFromInput.count
+                    otpDigitsEnteredByPassenger[digitIndex] = digitIndex < digitsOnlyFromInput.count
                         ? String(digitsOnlyFromInput[digitsOnlyFromInput.index(digitsOnlyFromInput.startIndex, offsetBy: digitIndex)])
                         : ""
                 }
@@ -340,7 +343,7 @@ struct DriverConfirmPhoneOTPView: View {
         otpVerificationErrorMessage = nil
 
         await changePhoneViewModel.confirmPhoneNumberChangeWithEnteredOTP(enteredOTPCode: enteredOTPCodeJoined) {
-            driverProfileViewModel.refreshDisplayedPhoneNumber()
+            passengerProfileViewModel.refreshDisplayedPhoneNumber()
             dismissToPhoneEntryScreen()
         }
 
@@ -365,29 +368,23 @@ struct DriverConfirmPhoneOTPView: View {
     }
 
     private func resendVerificationCodeToNewNumber() {
-        otpDigitsEnteredByDriver = Array(repeating: "", count: 6)
+        otpDigitsEnteredByPassenger = Array(repeating: "", count: 6)
         otpVerificationErrorMessage = nil
         beginOTPResendCountdown()
         Task { await changePhoneViewModel.sendVerificationCodeToNewPhoneNumber() }
-    }
-
-    private func triggerOTPBoxShakeAnimation() async {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.3)) { otpVerificationShakeOffset = 10 }
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        withAnimation { otpVerificationShakeOffset = 0 }
     }
 }
 
 #Preview("Dark Mode") {
     NavigationStack {
-        DriverChangePhoneView(driverProfileViewModel: DriverProfileViewModel())
+        PassengerChangePhoneView(passengerProfileViewModel: PassengerProfileViewModel())
     }
     .preferredColorScheme(.dark)
 }
 
 #Preview("Light Mode") {
     NavigationStack {
-        DriverChangePhoneView(driverProfileViewModel: DriverProfileViewModel())
+        PassengerChangePhoneView(passengerProfileViewModel: PassengerProfileViewModel())
     }
     .preferredColorScheme(.light)
 }

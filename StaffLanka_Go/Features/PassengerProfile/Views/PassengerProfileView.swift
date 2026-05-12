@@ -1,17 +1,18 @@
 //
-//  PassengerProfile.swift
+//  PassengerProfileView.swift
 //  StaffLanka_Go
 //
 //  Created by Liviru Navaratna on 2026-04-05.
 //
 
 import SwiftUI
- 
+import PhotosUI
+
 struct PassengerProfileView: View {
     @ObservedObject var profileViewModel: PassengerProfileViewModel
     @ObservedObject private var authManager = AuthManager.shared
     @State private var showSignOutConfirm: Bool = false
- 
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
@@ -19,7 +20,7 @@ struct PassengerProfileView: View {
                     .padding(.top, 16)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 24)
- 
+
                 VStack(spacing: 20) {
                     servicesSection
                     accountSection
@@ -35,7 +36,6 @@ struct PassengerProfileView: View {
         .sheet(isPresented: $profileViewModel.showEditProfile) {
             PassengerEditProfileSheet(profileViewModel: profileViewModel)
         }
-        // Sign Out confirmation
         .alert("Sign Out", isPresented: $showSignOutConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Sign Out", role: .destructive) {
@@ -44,7 +44,6 @@ struct PassengerProfileView: View {
         } message: {
             Text("Are you sure you want to sign out?")
         }
-        // Remove Local Data confirmation
         .alert("Remove Local Data", isPresented: $profileViewModel.showRemoveLocalDataConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Remove", role: .destructive) {
@@ -53,13 +52,11 @@ struct PassengerProfileView: View {
         } message: {
             Text("This will remove all locally cached profile information, trip history, and notifications stored on this device. Your account and data on the server will not be affected.")
         }
-        // Remove Local Data — success
         .alert("Local Data Removed", isPresented: $profileViewModel.localDataRemoved) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("All locally stored data has been cleared from this device.")
         }
-        // Delete Account — confirmation
         .alert("Delete Account", isPresented: $profileViewModel.showDeleteAccountConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Delete My Account", role: .destructive) {
@@ -68,13 +65,11 @@ struct PassengerProfileView: View {
         } message: {
             Text("This will permanently delete your account, all your trip history, enrollment records, and attendance data. This action cannot be undone.")
         }
-        // Delete Account — error
         .alert("Deletion Failed", isPresented: $profileViewModel.showDeleteAccountError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(profileViewModel.deleteAccountError ?? "An unexpected error occurred. Please try again.")
         }
-        // Deletion in-progress overlay
         .overlay {
             if profileViewModel.isDeletingAccount {
                 ZStack {
@@ -95,23 +90,30 @@ struct PassengerProfileView: View {
             }
         }
     }
- 
-    //Profile Header
- 
+
     private var profileHeader: some View {
         Button {
             profileViewModel.openEditProfile()
         } label: {
             HStack(spacing: 14) {
                 ZStack {
-                    Circle()
-                        .fill(LinearGradient.brand)
-                        .frame(width: 64, height: 64)
-                    Text(profileViewModel.initials)
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(.white)
+                    if let profilePhotoData = profileViewModel.passengerProfilePhotoImageData,
+                       let uiImageFromData = UIImage(data: profilePhotoData) {
+                        Image(uiImage: uiImageFromData)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 64, height: 64)
+                            .clipShape(Circle())
+                    } else {
+                        Circle()
+                            .fill(LinearGradient.brand)
+                            .frame(width: 64, height: 64)
+                        Text(profileViewModel.initials)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.white)
+                    }
                 }
- 
+
                 VStack(alignment: .leading, spacing: 4) {
                     if profileViewModel.isLoadingProfile {
                         ProgressView()
@@ -133,9 +135,9 @@ struct PassengerProfileView: View {
                             .clipShape(Capsule())
                     }
                 }
- 
+
                 Spacer()
- 
+
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.textTertiary)
@@ -150,9 +152,7 @@ struct PassengerProfileView: View {
         }
         .buttonStyle(.plain)
     }
- 
-    //Sections
- 
+
     private var servicesSection: some View {
         profileSection(title: "Services") {
             NavigationLink(destination: PassengerEnrolledServicesView()) {
@@ -164,25 +164,20 @@ struct PassengerProfileView: View {
             }
         }
     }
- 
+
+    // Account section — Help & Support and Terms & Privacy removed per requirements
     private var accountSection: some View {
         profileSection(title: "Account") {
             NavigationLink(destination: PassengerNotificationSettingsView()) {
                 profileRowContent(icon: "bell.badge.fill", iconColor: Color.statusWarning, title: "Notification Settings")
             }
             rowDivider
-            profileRow(icon: "questionmark.circle.fill", iconColor: Color.statusWarning, title: "Help & Support") {}
-            rowDivider
-            profileRow(icon: "doc.text.fill", iconColor: Color.brandSecondary, title: "Terms & Privacy") {}
-            rowDivider
- 
-            // Face ID / Touch ID toggle — only shown when the device supports biometrics
+
             if BiometricService.shared.deviceSupportsBiometricAuthentication {
                 biometricToggleRow
                 rowDivider
             }
- 
-            // Remove Local Data
+
             profileRow(
                 icon: "internaldrive",
                 iconColor: Color.statusInfo,
@@ -192,8 +187,7 @@ struct PassengerProfileView: View {
                 profileViewModel.showRemoveLocalDataConfirm = true
             }
             rowDivider
- 
-            // Sign Out
+
             profileRow(
                 icon: "arrow.right.square.fill",
                 iconColor: Color.statusDanger,
@@ -204,8 +198,7 @@ struct PassengerProfileView: View {
                 showSignOutConfirm = true
             }
             rowDivider
- 
-            // Delete Account
+
             profileRow(
                 icon: "trash.fill",
                 iconColor: Color.statusDanger,
@@ -217,10 +210,7 @@ struct PassengerProfileView: View {
             }
         }
     }
- 
-    //A toggle row that enables or disables biometric sign-in.
-    //Turning it ON triggers a live Face ID challenge to confirm hardware consent
-    //before the preference is persisted. Turning it OFF simply clears the flag.
+
     private var biometricToggleRow: some View {
         HStack(spacing: 12) {
             settingsIcon(systemName: "faceid", color: Color.brandAccent)
@@ -230,14 +220,13 @@ struct PassengerProfileView: View {
             Spacer()
             Toggle("", isOn: Binding(
                 get: { authManager.isBiometricEnabled },
-                set: { newValue in
-                    if newValue {
-                        // Require a successful biometric challenge before enabling
+                set: { newBiometricToggleValue in
+                    if newBiometricToggleValue {
                         Task {
-                            let succeeded = await BiometricService.shared.authenticateWithBiometrics(
+                            let biometricAuthSucceeded = await BiometricService.shared.authenticateWithBiometrics(
                                 reasonMessage: "Verify your identity to enable \(BiometricService.shared.biometricTypeDisplayName) sign-in"
                             )
-                            if succeeded {
+                            if biometricAuthSucceeded {
                                 authManager.enableBiometric()
                             }
                         }
@@ -253,7 +242,7 @@ struct PassengerProfileView: View {
         .padding(.vertical, 13)
         .contentShape(Rectangle())
     }
- 
+
     private var versionFooter: some View {
         Text("StaffLanka Go  v1.0.0")
             .font(.system(size: 12))
@@ -261,9 +250,7 @@ struct PassengerProfileView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 4)
     }
- 
-    //Reusable Helpers
- 
+
     private func profileSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
@@ -272,7 +259,7 @@ struct PassengerProfileView: View {
                 .textCase(.uppercase)
                 .tracking(0.5)
                 .padding(.horizontal, 4)
- 
+
             VStack(spacing: 0) {
                 content()
             }
@@ -284,7 +271,7 @@ struct PassengerProfileView: View {
             )
         }
     }
- 
+
     private func profileRowContent(icon: String, iconColor: Color, title: String, titleColor: Color = .textPrimary) -> some View {
         HStack(spacing: 12) {
             settingsIcon(systemName: icon, color: iconColor)
@@ -300,7 +287,7 @@ struct PassengerProfileView: View {
         .padding(.vertical, 13)
         .contentShape(Rectangle())
     }
- 
+
     private func profileRow(
         icon: String,
         iconColor: Color,
@@ -328,7 +315,7 @@ struct PassengerProfileView: View {
         }
         .buttonStyle(.plain)
     }
- 
+
     private func settingsIcon(systemName: String, color: Color) -> some View {
         Image(systemName: systemName)
             .font(.system(size: 13, weight: .semibold))
@@ -337,81 +324,104 @@ struct PassengerProfileView: View {
             .background(color)
             .clipShape(RoundedRectangle(cornerRadius: 7))
     }
- 
+
     private var rowDivider: some View {
         Divider()
             .padding(.leading, 58)
     }
 }
- 
-//Edit Profile Sheet (unchanged)
- 
+
+// Edit Profile Sheet for passenger — mirrors the driver edit sheet exactly:
+// list layout, photo picker, name field, phone NavigationLink (no verified badge), email field
+// Each row has .listRowBackground(Color.cardBackground) so the theme blue shows instead of system gray
+
 struct PassengerEditProfileSheet: View {
     @ObservedObject var profileViewModel: PassengerProfileViewModel
     @Environment(\.dismiss) private var dismiss
- 
+
     var body: some View {
         NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 24) {
-                    ZStack {
-                        Circle()
-                            .fill(LinearGradient.brand)
-                            .frame(width: 88, height: 88)
-                        Text(profileViewModel.initials)
-                            .font(.system(size: 30, weight: .bold))
-                            .foregroundColor(.white)
+            List {
+                // Avatar photo picker section
+                Section {
+                    HStack {
+                        Spacer()
+                        PhotosPicker(
+                            selection: $profileViewModel.selectedProfilePhotoPicPickerItem,
+                            matching: .images,
+                            photoLibrary: .shared()
+                        ) {
+                            ZStack(alignment: .bottomTrailing) {
+                                passengerAvatarInEditSheet
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.brandAccent)
+                                        .frame(width: 26, height: 26)
+                                    Image(systemName: "camera.fill")
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundColor(.white)
+                                }
+                                .offset(x: 2, y: 2)
+                            }
+                        }
+                        .onChange(of: profileViewModel.selectedProfilePhotoPicPickerItem) { _, newPickerItem in
+                            if let newPickerItem {
+                                profileViewModel.processAndSaveSelectedProfilePhoto(selectedPhotoPickerItem: newPickerItem)
+                            }
+                        }
+                        Spacer()
                     }
-                    .padding(.top, 24)
- 
-                    VStack(spacing: 0) {
-                        editField(label: "Full Name", icon: "person.fill", value: $profileViewModel.editingName, keyboard: .default)
-                        Divider().padding(.leading, 16)
-                        editField(label: "Email", icon: "envelope.fill", value: $profileViewModel.editingEmail, keyboard: .emailAddress)
-                        Divider().padding(.leading, 16)
- 
+                    .listRowBackground(Color.clear)
+                }
+
+                // Personal information section — each row explicitly tagged with cardBackground
+                Section("Personal Information") {
+                    editSheetTextField(
+                        fieldLabel: "Full Name",
+                        iconName: "person.fill",
+                        boundValue: $profileViewModel.editingName,
+                        keyboardType: .default
+                    )
+                    .listRowBackground(Color.cardBackground)
+
+                    // Phone number row — NavigationLink to change phone flow, no verified badge
+                    NavigationLink {
+                        PassengerChangePhoneView(passengerProfileViewModel: profileViewModel)
+                    } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "phone.fill")
                                 .font(.system(size: 13))
                                 .foregroundColor(.brandAccent)
                                 .frame(width: 18)
-                            Text(profileViewModel.user.phone)
-                                .font(.system(size: 15))
-                                .foregroundColor(.textSecondary)
-                            Spacer()
-                            HStack(spacing: 4) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 11))
-                                Text("Verified")
-                                    .font(.system(size: 11, weight: .semibold))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Phone Number")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.textSecondary)
+                                Text(profileViewModel.user.phone)
+                                    .font(.system(size: 15))
+                                    .foregroundColor(.textPrimary)
                             }
-                            .foregroundColor(.statusActive)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.statusActive.opacity(0.10))
-                            .clipShape(Capsule())
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
                     }
-                    .background(Color.cardBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(Color.divider, lineWidth: 1)
+                    .listRowBackground(Color.cardBackground)
+
+                    editSheetTextField(
+                        fieldLabel: "Email Address",
+                        iconName: "envelope.fill",
+                        boundValue: $profileViewModel.editingEmail,
+                        keyboardType: .emailAddress
                     )
-                    .padding(.horizontal, 16)
- 
-                    Spacer()
+                    .listRowBackground(Color.cardBackground)
                 }
             }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
             .background(Color.appBackground)
             .navigationTitle("Edit Profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
-                        .font(.system(size: 15))
                         .foregroundColor(.textSecondary)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -431,33 +441,51 @@ struct PassengerEditProfileSheet: View {
             }
         }
     }
- 
-    private func editField(label: String, icon: String, value: Binding<String>, keyboard: UIKeyboardType) -> some View {
+
+    // Avatar shown in the edit sheet — photo if available, otherwise gradient initials circle
+    @ViewBuilder
+    private var passengerAvatarInEditSheet: some View {
+        if let profilePhotoData = profileViewModel.passengerProfilePhotoImageData,
+           let uiImageFromData = UIImage(data: profilePhotoData) {
+            Image(uiImage: uiImageFromData)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 88, height: 88)
+                .clipShape(Circle())
+        } else {
+            Circle()
+                .fill(LinearGradient.brand)
+                .frame(width: 88, height: 88)
+                .overlay(
+                    Text(profileViewModel.initials)
+                        .font(.system(size: 30, weight: .bold))
+                        .foregroundColor(.white)
+                )
+        }
+    }
+
+    private func editSheetTextField(fieldLabel: String, iconName: String, boundValue: Binding<String>, keyboardType: UIKeyboardType) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon)
+            Image(systemName: iconName)
                 .font(.system(size: 13))
                 .foregroundColor(.brandAccent)
                 .frame(width: 18)
-            TextField(label, text: value)
+            TextField(fieldLabel, text: boundValue)
                 .font(.system(size: 15))
                 .foregroundColor(.textPrimary)
                 .tint(.brandAccent)
-                .keyboardType(keyboard)
+                .keyboardType(keyboardType)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
     }
 }
- 
-//Previews
- 
+
 #Preview("Dark Mode") {
     NavigationStack {
         PassengerProfileView(profileViewModel: PassengerProfileViewModel())
     }
     .preferredColorScheme(.dark)
 }
- 
+
 #Preview("Light Mode") {
     NavigationStack {
         PassengerProfileView(profileViewModel: PassengerProfileViewModel())

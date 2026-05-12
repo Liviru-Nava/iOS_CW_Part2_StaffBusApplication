@@ -135,7 +135,7 @@ final class PassengerTripHistoryViewModel: ObservableObject {
                 self.records = builtRecords.sorted { $0.date > $1.date }
                 
             } catch {
-                print("🔴 Failed to fetch passenger history: \(error)")
+                print(" Failed to fetch passenger history: \(error)")
             }
         }
     }

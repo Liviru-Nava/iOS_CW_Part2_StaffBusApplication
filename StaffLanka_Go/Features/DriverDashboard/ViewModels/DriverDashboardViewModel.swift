@@ -204,9 +204,9 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
                 )
                 self.activeTripId = tripId
                 self.startLocationUpdateTimer()
-                print("🟢 [DriverDashboardVM] Trip started, tripId: \(tripId)")
+                print(" [DriverDashboardVM] Trip started, tripId: \(tripId)")
             } catch {
-                print("🔴 [DriverDashboardVM] startTrip Firestore error: \(error.localizedDescription)")
+                print(" [DriverDashboardVM] startTrip Firestore error: \(error.localizedDescription)")
             }
         }
 
@@ -232,9 +232,9 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
             Task {
                 do {
                     try await TripService.shared.finishTrip(tripId: tripId)
-                    print("🟢 [DriverDashboardVM] Trip finished, tripId: \(tripId)")
+                    print(" [DriverDashboardVM] Trip finished, tripId: \(tripId)")
                 } catch {
-                    print("🔴 [DriverDashboardVM] finishTrip Firestore error: \(error.localizedDescription)")
+                    print(" [DriverDashboardVM] finishTrip Firestore error: \(error.localizedDescription)")
                 }
             }
             activeTripId = nil
@@ -294,7 +294,7 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
                     if let docs = snapshot?.documents {
                         let requests = docs.compactMap { try? $0.data(as: JoinRequestModel.self) }
                         self.totalEnrolledPassengerCount = requests.count
-                        print("🟢 [DriverDashboardVM] Enrolled passengers: \(self.totalEnrolledPassengerCount)")
+                        print(" [DriverDashboardVM] Enrolled passengers: \(self.totalEnrolledPassengerCount)")
                         
                         var mPass: [SimulationEnrolledPassenger] = []
                         var ePass: [SimulationEnrolledPassenger] = []
@@ -346,7 +346,7 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
                     self.startAttendanceListeners(routeId: routeId)
                     
                 } catch {
-                    print("🔴 [DriverDashboardVM] Error fetching route for dashboard: \(error)")
+                    print(" [DriverDashboardVM] Error fetching route for dashboard: \(error)")
                     self.morningSessionScheduledStartTime = "Unavailable"
                     self.morningSessionEstimatedEndTime = "Unavailable"
                     self.eveningSessionScheduledStartTime = "Unavailable"

@@ -236,15 +236,6 @@ struct RouteSearchView: View {
                             .background(Color.brandAccent.opacity(0.10))
                             .clipShape(RoundedRectangle(cornerRadius: 5))
                     }
-                    Spacer()
-                    HStack(spacing: 3) {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Color.statusWarning)
-                        Text("5.0")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Color.textPrimary)
-                    }
                 }
 
                 HStack(spacing: 8) {
