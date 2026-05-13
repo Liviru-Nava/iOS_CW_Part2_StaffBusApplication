@@ -97,7 +97,7 @@ final class DriverRouteScheduleViewModel: ObservableObject {
 
     @Published var activeSearchTarget: SearchTarget? = nil
     @Published var mapRegion: MKCoordinateRegion = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 6.9271, longitude: 79.8612), // Colombo, Sri Lanka
+        center: CLLocationCoordinate2D(latitude: 6.9271, longitude: 79.8612),
         span: MKCoordinateSpan(latitudeDelta: 0.2, longitudeDelta: 0.2)
     )
     @Published var mapPinnedCoordinate: CLLocationCoordinate2D? = nil
@@ -130,17 +130,20 @@ final class DriverRouteScheduleViewModel: ObservableObject {
     }
 
     var isPricingValid: Bool {
-        guard let morning = Double(morningPrice),
-              let evening = Double(eveningPrice),
-              let both = Double(bothTripsPrice) else {
+        guard let morningPriceDouble = Double(morningPrice),
+              let eveningPriceDouble = Double(eveningPrice),
+              let bothTripsPriceDouble = Double(bothTripsPrice) else {
             return false
         }
-        
-        let isValidRange = { (price: Double) -> Bool in
-            price >= 5000 && price <= 15000
+
+        let isPriceInValidRange = { (priceValue: Double) -> Bool in
+            priceValue >= 5000 && priceValue <= 15000
         }
-        
-        return isValidRange(morning) && isValidRange(evening) && isValidRange(both) && (both < (morning + evening))
+
+        return isPriceInValidRange(morningPriceDouble) &&
+               isPriceInValidRange(eveningPriceDouble) &&
+               isPriceInValidRange(bothTripsPriceDouble) &&
+               (bothTripsPriceDouble < (morningPriceDouble + eveningPriceDouble))
     }
 
     var canSubmit: Bool {
@@ -152,33 +155,33 @@ final class DriverRouteScheduleViewModel: ObservableObject {
     }
 
     var allMapAnnotations: [MapSearchResult] {
-        var annotations: [MapSearchResult] = []
-        if let startCoord = startCoordinate {
-            annotations.append(MapSearchResult(
+        var allAnnotationItems: [MapSearchResult] = []
+        if let resolvedStartCoordinate = startCoordinate {
+            allAnnotationItems.append(MapSearchResult(
                 title: startingPoint.isEmpty ? "Start" : startingPoint,
                 subtitle: "Start",
-                coordinate: startCoord
+                coordinate: resolvedStartCoordinate
             ))
         }
-        for stop in orderedStops {
-            if let stopCoord = stop.coordinate {
-                annotations.append(MapSearchResult(title: stop.name, subtitle: "Stop", coordinate: stopCoord))
+        for routeStop in orderedStops {
+            if let resolvedStopCoordinate = routeStop.coordinate {
+                allAnnotationItems.append(MapSearchResult(title: routeStop.name, subtitle: "Stop", coordinate: resolvedStopCoordinate))
             }
         }
-        if let endCoord = endCoordinate {
-            annotations.append(MapSearchResult(
+        if let resolvedEndCoordinate = endCoordinate {
+            allAnnotationItems.append(MapSearchResult(
                 title: endingPoint.isEmpty ? "End" : endingPoint,
                 subtitle: "End",
-                coordinate: endCoord
+                coordinate: resolvedEndCoordinate
             ))
         }
-        return annotations
+        return allAnnotationItems
     }
 
 
     func computedArrival(from departureTime: Date) -> Date {
-        let totalTravelMinutes = (stops.count + 1) * travelMinutesPerStop
-        return Calendar.current.date(byAdding: .minute, value: totalTravelMinutes, to: departureTime) ?? departureTime
+        let totalTravelMinutesForAllStops = (stops.count + 1) * travelMinutesPerStop
+        return Calendar.current.date(byAdding: .minute, value: totalTravelMinutesForAllStops, to: departureTime) ?? departureTime
     }
 
     func updateArrivalTimes() {
@@ -188,14 +191,14 @@ final class DriverRouteScheduleViewModel: ObservableObject {
 
 
     func addStop() {
-        let trimmedName = newStopName.trimmingCharacters(in: .whitespaces)
-        guard !trimmedName.isEmpty else { return }
-        let newStop = RouteStop(
-            name: trimmedName,
+        let trimmedStopName = newStopName.trimmingCharacters(in: .whitespaces)
+        guard !trimmedStopName.isEmpty else { return }
+        let newRouteStop = RouteStop(
+            name: trimmedStopName,
             locationLabel: newStopLocation.trimmingCharacters(in: .whitespaces),
             order: stops.count
         )
-        stops.append(newStop)
+        stops.append(newRouteStop)
         newStopName = ""
         showAddStop = false
         updateArrivalTimes()
@@ -203,22 +206,22 @@ final class DriverRouteScheduleViewModel: ObservableObject {
 
     func removeStop(at offsets: IndexSet) {
         stops.remove(atOffsets: offsets)
-        for index in stops.indices { stops[index].order = index }
+        for stopIndex in stops.indices { stops[stopIndex].order = stopIndex }
         updateArrivalTimes()
     }
 
     func moveStop(from sourceOffsets: IndexSet, to destinationOffset: Int) {
         stops.move(fromOffsets: sourceOffsets, toOffset: destinationOffset)
-        for index in stops.indices { stops[index].order = index }
+        for stopIndex in stops.indices { stops[stopIndex].order = stopIndex }
         updateArrivalTimes()
     }
 
 
-    func toggleDay(_ day: DayOfWeek) {
-        if selectedDays.contains(day) {
-            selectedDays.remove(day)
+    func toggleDay(_ dayOfWeek: DayOfWeek) {
+        if selectedDays.contains(dayOfWeek) {
+            selectedDays.remove(dayOfWeek)
         } else {
-            selectedDays.insert(day)
+            selectedDays.insert(dayOfWeek)
         }
     }
 
@@ -250,26 +253,26 @@ final class DriverRouteScheduleViewModel: ObservableObject {
     }
 
     func flyToRoute() {
-        var routeCoordinates: [CLLocationCoordinate2D] = []
-        if let startCoord = startCoordinate { routeCoordinates.append(startCoord) }
-        routeCoordinates += orderedStops.compactMap { $0.coordinate }
-        if let endCoord = endCoordinate { routeCoordinates.append(endCoord) }
-        guard routeCoordinates.count >= 2 else { return }
+        var allRouteCoordinates: [CLLocationCoordinate2D] = []
+        if let resolvedStartCoordinate = startCoordinate { allRouteCoordinates.append(resolvedStartCoordinate) }
+        allRouteCoordinates += orderedStops.compactMap { $0.coordinate }
+        if let resolvedEndCoordinate = endCoordinate { allRouteCoordinates.append(resolvedEndCoordinate) }
+        guard allRouteCoordinates.count >= 2 else { return }
 
-        let latitudes  = routeCoordinates.map { $0.latitude }
-        let longitudes = routeCoordinates.map { $0.longitude }
-        let minLatitude  = latitudes.min()!;  let maxLatitude  = latitudes.max()!
-        let minLongitude = longitudes.min()!; let maxLongitude = longitudes.max()!
+        let allLatitudes  = allRouteCoordinates.map { $0.latitude }
+        let allLongitudes = allRouteCoordinates.map { $0.longitude }
+        let minimumLatitude  = allLatitudes.min()!;  let maximumLatitude  = allLatitudes.max()!
+        let minimumLongitude = allLongitudes.min()!; let maximumLongitude = allLongitudes.max()!
 
-        let centerCoordinate = CLLocationCoordinate2D(
-            latitude:  (minLatitude  + maxLatitude)  / 2,
-            longitude: (minLongitude + maxLongitude) / 2
+        let routeCenterCoordinate = CLLocationCoordinate2D(
+            latitude:  (minimumLatitude  + maximumLatitude)  / 2,
+            longitude: (minimumLongitude + maximumLongitude) / 2
         )
-        let paddedSpan = MKCoordinateSpan(
-            latitudeDelta:  (maxLatitude  - minLatitude)  * 1.4 + 0.02,
-            longitudeDelta: (maxLongitude - minLongitude) * 1.4 + 0.02
+        let paddedCoordinateSpan = MKCoordinateSpan(
+            latitudeDelta:  (maximumLatitude  - minimumLatitude)  * 1.4 + 0.02,
+            longitudeDelta: (maximumLongitude - minimumLongitude) * 1.4 + 0.02
         )
-        mapRegion = MKCoordinateRegion(center: centerCoordinate, span: paddedSpan)
+        mapRegion = MKCoordinateRegion(center: routeCenterCoordinate, span: paddedCoordinateSpan)
     }
 
     func pinOnMap(coordinate tappedCoordinate: CLLocationCoordinate2D) {
@@ -277,16 +280,16 @@ final class DriverRouteScheduleViewModel: ObservableObject {
         mapPinnedLabel = ""
         Task {
             do {
-                let tappedLocation = CLLocation(latitude: tappedCoordinate.latitude,
-                                                longitude: tappedCoordinate.longitude)
-                let reverseGeocodeRequest = MKReverseGeocodingRequest(location: tappedLocation)
-                let mapItems = try await reverseGeocodeRequest?.mapItems ?? []
-                if let firstItem = mapItems.first {
-                    let resolvedName = firstItem.name
-                        ?? firstItem.address?.shortAddress
-                        ?? firstItem.address?.fullAddress
+                let tappedCLLocation = CLLocation(latitude: tappedCoordinate.latitude,
+                                                  longitude: tappedCoordinate.longitude)
+                let reverseGeocodeRequest = MKReverseGeocodingRequest(location: tappedCLLocation)
+                let resolvedMapItems = try await reverseGeocodeRequest?.mapItems ?? []
+                if let firstResolvedMapItem = resolvedMapItems.first {
+                    let resolvedLocationName = firstResolvedMapItem.name
+                        ?? firstResolvedMapItem.address?.shortAddress
+                        ?? firstResolvedMapItem.address?.fullAddress
                         ?? "Selected location"
-                    self.mapPinnedLabel = resolvedName
+                    self.mapPinnedLabel = resolvedLocationName
                 }
             } catch {
                 self.mapPinnedLabel = "Selected location"
@@ -295,23 +298,23 @@ final class DriverRouteScheduleViewModel: ObservableObject {
     }
 
     func confirmPin() {
-        guard let pinnedCoordinate = mapPinnedCoordinate else { return }
-        let resolvedLabel = mapPinnedLabel.isEmpty ? "Pinned location" : mapPinnedLabel
+        guard let confirmedPinnedCoordinate = mapPinnedCoordinate else { return }
+        let resolvedPinnedLabel = mapPinnedLabel.isEmpty ? "Pinned location" : mapPinnedLabel
         switch activeSearchTarget {
         case .start:
-            startCoordinate = pinnedCoordinate
-            startingPoint   = resolvedLabel
+            startCoordinate = confirmedPinnedCoordinate
+            startingPoint   = resolvedPinnedLabel
         case .end:
-            endCoordinate = pinnedCoordinate
-            endingPoint   = resolvedLabel
+            endCoordinate = confirmedPinnedCoordinate
+            endingPoint   = resolvedPinnedLabel
         case .stop:
-            let newStop = RouteStop(
-                name: resolvedLabel,
-                locationLabel: resolvedLabel,
+            let newPinnedStop = RouteStop(
+                name: resolvedPinnedLabel,
+                locationLabel: resolvedPinnedLabel,
                 order: stops.count,
-                coordinate: pinnedCoordinate
+                coordinate: confirmedPinnedCoordinate
             )
-            stops.append(newStop)
+            stops.append(newPinnedStop)
             updateArrivalTimes()
         case nil:
             break
@@ -319,20 +322,20 @@ final class DriverRouteScheduleViewModel: ObservableObject {
         cancelSearch()
     }
 
-    func selectSearchResult(_ selectedResult: MapSearchResult) {
-        mapPinnedCoordinate = selectedResult.coordinate
-        mapPinnedLabel      = selectedResult.title
+    func selectSearchResult(_ selectedSearchResult: MapSearchResult) {
+        mapPinnedCoordinate = selectedSearchResult.coordinate
+        mapPinnedLabel      = selectedSearchResult.title
         mapRegion = MKCoordinateRegion(
-            center: selectedResult.coordinate,
+            center: selectedSearchResult.coordinate,
             span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
         )
         mapSearchResults = []
-        mapSearchQuery   = selectedResult.title
+        mapSearchQuery   = selectedSearchResult.title
     }
 
-    func searchLocations(query searchQuery: String) {
+    func searchLocations(query searchQueryString: String) {
         activeSearchTask?.cancel()
-        guard !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard !searchQueryString.trimmingCharacters(in: .whitespaces).isEmpty else {
             mapSearchResults = []
             return
         }
@@ -341,16 +344,16 @@ final class DriverRouteScheduleViewModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled else { return }
             let localSearchRequest = MKLocalSearch.Request()
-            localSearchRequest.naturalLanguageQuery = searchQuery
+            localSearchRequest.naturalLanguageQuery = searchQueryString
             localSearchRequest.region = mapRegion
-            let fetchedItems = (try? await MKLocalSearch(request: localSearchRequest).start())?.mapItems ?? []
+            let fetchedMapItems = (try? await MKLocalSearch(request: localSearchRequest).start())?.mapItems ?? []
             guard !Task.isCancelled else { return }
-            mapSearchResults = fetchedItems.prefix(8).map { mapItem in
-                let subtitleText = mapItem.address?.shortAddress ?? mapItem.address?.fullAddress ?? ""
+            mapSearchResults = fetchedMapItems.prefix(8).map { fetchedMapItem in
+                let subtitleText = fetchedMapItem.address?.shortAddress ?? fetchedMapItem.address?.fullAddress ?? ""
                 return MapSearchResult(
-                    title: mapItem.name ?? "",
+                    title: fetchedMapItem.name ?? "",
                     subtitle: subtitleText,
-                    coordinate: mapItem.location.coordinate
+                    coordinate: fetchedMapItem.location.coordinate
                 )
             }
             isSearching = false
@@ -395,9 +398,9 @@ final class DriverRouteScheduleViewModel: ObservableObject {
                 activeDays: selectedDays.map { $0.rawValue }
             )
 
-            let mPrice = Double(morningPrice) ?? 0.0
-            let ePrice = Double(eveningPrice) ?? 0.0
-            let bPrice = Double(bothTripsPrice) ?? 0.0
+            let morningPriceDouble = Double(morningPrice) ?? 0.0
+            let eveningPriceDouble = Double(eveningPrice) ?? 0.0
+            let bothTripsPriceDouble = Double(bothTripsPrice) ?? 0.0
 
             let newRouteRecord = RouteModel(
                 id: nil,
@@ -414,19 +417,18 @@ final class DriverRouteScheduleViewModel: ObservableObject {
                 ),
                 routeStops: routeStopDataList,
                 scheduleEntries: [morningScheduleEntry, eveningScheduleEntry],
-                morningPrice: mPrice,
-                eveningPrice: ePrice,
-                bothTripsPrice: bPrice,
+                morningPrice: morningPriceDouble,
+                eveningPrice: eveningPriceDouble,
+                bothTripsPrice: bothTripsPriceDouble,
                 pricePerTrip: nil,
                 routeCreatedAt: Date(),
                 startName: startingPoint,
                 endName: endingPoint
             )
 
-
             let createdRouteId = try await RouteService.shared.createRoute(routeRecord: newRouteRecord)
 
-            let busInfoForDriver = DriverBusInfo(
+            let busInfoForDriverRecord = DriverBusInfo(
                 plateNumber: upstreamBusInfoViewModel.plateNumber,
                 busName: upstreamBusInfoViewModel.busName,
                 busType: upstreamBusInfoViewModel.busType.rawValue,
@@ -437,7 +439,7 @@ final class DriverRouteScheduleViewModel: ObservableObject {
                 id: authenticatedUserId,
                 fullName: upstreamPersonalInfoViewModel.fullName,
                 licenseNumber: upstreamPersonalInfoViewModel.licenseNumber,
-                busInformation: busInfoForDriver,
+                busInformation: busInfoForDriverRecord,
                 assignedRouteId: createdRouteId,
                 driverCreatedAt: Date()
             )
@@ -452,6 +454,9 @@ final class DriverRouteScheduleViewModel: ObservableObject {
 
             await AuthManager.shared.refreshUserRoleFromFirestore(userId: authenticatedUserId)
 
+            // Schedule recurring calendar reminders for both operating sessions
+            await scheduleDriverCalendarRemindersAfterOnboarding()
+
             isSubmitting = false
             onboardingComplete = true
 
@@ -459,5 +464,22 @@ final class DriverRouteScheduleViewModel: ObservableObject {
             submissionErrorMessage = error.localizedDescription
             isSubmitting = false
         }
+    }
+
+    // Creates recurring calendar events for the driver's morning and evening operating schedule
+    private func scheduleDriverCalendarRemindersAfterOnboarding() async {
+        let activeDayStrings = selectedDays.map { $0.rawValue }
+
+        await EventKitManager.shared.scheduleDriverOperatingDayReminders(
+            routeStartLocationName: startingPoint,
+            routeEndLocationName: endingPoint,
+            morningDepartureTime: morningTrip.departureTime,
+            morningEstimatedArrivalTime: morningTrip.estimatedArrivalTime,
+            eveningDepartureTime: eveningTrip.departureTime,
+            eveningEstimatedArrivalTime: eveningTrip.estimatedArrivalTime,
+            routeActiveDays: activeDayStrings
+        )
+
+        print("[DriverRouteScheduleViewModel] Driver calendar reminders scheduled for route: \(startingPoint) → \(endingPoint)")
     }
 }

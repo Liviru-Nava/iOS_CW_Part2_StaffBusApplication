@@ -44,7 +44,7 @@ final class AttendanceService {
         ]
 
         try await db.collection(collection).document(docId).setData(data, merge: true)
-        print("🟢 [AttendanceService] \(session) attendance for \(passengerId) set to '\(status)'")
+        print(" [AttendanceService] \(session) attendance for \(passengerId) set to '\(status)'")
     }
 
     // Fetch attendance for a specific date
@@ -76,11 +76,11 @@ final class AttendanceService {
     ) -> ListenerRegistration {
         let dayStart = Calendar.current.startOfDay(for: date)
         let docId = "\(passengerId)_\(routeId)_\(session)_\(Int(dayStart.timeIntervalSince1970))"
-        print("🔵 [AttendanceService] Listening to attendance doc: \(docId)")
+        print("[AttendanceService] Listening to attendance doc: \(docId)")
         return db.collection(collection).document(docId)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
-                    print("🔴 [AttendanceService] Listener error: \(error.localizedDescription)")
+                    print(" [AttendanceService] Listener error: \(error.localizedDescription)")
                     onChange(nil)
                     return
                 }
@@ -102,7 +102,7 @@ final class AttendanceService {
         onChange: @escaping ([AttendanceModel]) -> Void
     ) -> ListenerRegistration {
         let dayStart = Calendar.current.startOfDay(for: date)
-        print("🔵 [AttendanceService] Listening for ALL attendance routeId: \(routeId), session: \(session), date: \(dayStart)")
+        print("[AttendanceService] Listening for ALL attendance routeId: \(routeId), session: \(session), date: \(dayStart)")
         
         return db.collection(collection)
             .whereField("routeId", isEqualTo: routeId)
@@ -110,7 +110,7 @@ final class AttendanceService {
             .whereField("tripDate", isEqualTo: Timestamp(date: dayStart))
             .addSnapshotListener { snapshot, error in
                 if let error = error {
-                    print("🔴 [AttendanceService] Route listener error: \(error.localizedDescription)")
+                    print(" [AttendanceService] Route listener error: \(error.localizedDescription)")
                     onChange([])
                     return
                 }

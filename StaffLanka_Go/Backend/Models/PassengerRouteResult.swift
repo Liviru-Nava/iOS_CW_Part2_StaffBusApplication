@@ -59,18 +59,18 @@ extension PassengerRouteResult {
 
     static func build(from route: RouteModel, driver: DriverModel) -> PassengerRouteResult? {
         guard let routeId = route.id else {
-            print("🔴 [PassengerRouteResult] build() — route missing document ID, skipping")
+            print(" [PassengerRouteResult] build() — route missing document ID, skipping")
             return nil
         }
         guard route.scheduleEntries.count >= 2 else {
-            print("🔴 [PassengerRouteResult] build() — route \(routeId) has \(route.scheduleEntries.count) schedule entry(ies), need ≥ 2")
+            print(" [PassengerRouteResult] build() — route \(routeId) has \(route.scheduleEntries.count) schedule entry(ies), need ≥ 2")
             return nil
         }
 
         let morningEntry = route.scheduleEntries[0]
         let eveningEntry = route.scheduleEntries[1]
 
-        print("🟢 [PassengerRouteResult] build() — route \(routeId) | driver: \(driver.fullName)")
+        print(" [PassengerRouteResult] build() — route \(routeId) | driver: \(driver.fullName)")
         print("   Morning: dep=\(morningEntry.scheduledDepartureTime) arr=\(String(describing: morningEntry.scheduledArrivalTime))")
         print("   Evening: dep=\(eveningEntry.scheduledDepartureTime) arr=\(String(describing: eveningEntry.scheduledArrivalTime))")
         print("   Prices: morning=\(String(describing: route.morningPrice)) evening=\(String(describing: route.eveningPrice)) both=\(String(describing: route.bothTripsPrice))")
@@ -104,15 +104,15 @@ extension PassengerRouteResult {
 
     static func buildPartial(from route: RouteModel) -> PassengerRouteResult? {
         guard let routeId = route.id else {
-            print("🔴 [PassengerRouteResult] buildPartial() — route missing document ID")
+            print(" [PassengerRouteResult] buildPartial() — route missing document ID")
             return nil
         }
         guard route.scheduleEntries.count >= 2 else {
-            print("🔴 [PassengerRouteResult] buildPartial() — route \(routeId) has insufficient schedule entries")
+            print(" [PassengerRouteResult] buildPartial() — route \(routeId) has insufficient schedule entries")
             return nil
         }
 
-        print("🟡 [PassengerRouteResult] buildPartial() — building from route data only (driver doc unreadable) | route \(routeId)")
+        print("[PassengerRouteResult] buildPartial() — building from route data only (driver doc unreadable) | route \(routeId)")
 
         let morningEntry = route.scheduleEntries[0]
         let eveningEntry = route.scheduleEntries[1]

@@ -18,6 +18,9 @@ struct SentRequestsView: View {
         .background(Color.appBackground)
         .navigationTitle("Sent Requests")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            sentRequestsViewModel.startListeningForUserRequests()
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -68,7 +71,9 @@ struct SentRequestsView: View {
 
     @ViewBuilder
     private var content: some View {
-        if sentRequestsViewModel.groupedRequests.isEmpty {
+        if sentRequestsViewModel.isLoadingRequests {
+            loadingState
+        } else if sentRequestsViewModel.groupedRequests.isEmpty {
             emptyState
         } else {
             List {
@@ -94,6 +99,21 @@ struct SentRequestsView: View {
             .scrollContentBackground(.hidden)
             .background(Color.appBackground)
         }
+    }
+
+    private var loadingState: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            ProgressView()
+                .scaleEffect(1.2)
+                .tint(Color.brandAccent)
+            Text("Loading your requests…")
+                .font(.system(size: 13))
+                .foregroundColor(.textSecondary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.appBackground)
     }
 
     private func requestCard(_ request: SentRequest) -> some View {

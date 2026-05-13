@@ -81,4 +81,16 @@ final class UserService {
             "phone": updatedPhoneNumber
         ])
     }
+
+    // Saves the passenger profile photo as a base64 string in the users collection
+    // Used by PassengerProfileViewModel when the user picks a new photo from their library
+    func updatePassengerProfilePhoto(userId: String, base64PhotoString: String) async throws {
+        let userDocumentReference = firestoreDatabase
+            .collection(usersCollectionPath)
+            .document(userId)
+
+        try await userDocumentReference.updateData([
+            "profilePhotoBase64": base64PhotoString
+        ])
+    }
 }

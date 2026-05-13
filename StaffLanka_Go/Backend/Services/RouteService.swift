@@ -45,11 +45,11 @@ final class RouteService {
     }
 
     func fetchAllRoutes() async throws -> [RouteModel] {
-        print("🔵 [RouteService] fetchAllRoutes — querying '\(routesCollectionPath)' collection")
+        print("[RouteService] fetchAllRoutes — querying '\(routesCollectionPath)' collection")
         let snapshot = try await firestoreDatabase
             .collection(routesCollectionPath)
             .getDocuments()
-        print("🟢 [RouteService] fetchAllRoutes — got \(snapshot.documents.count) raw document(s)")
+        print(" [RouteService] fetchAllRoutes — got \(snapshot.documents.count) raw document(s)")
 
         var decoded: [RouteModel] = []
         for doc in snapshot.documents {

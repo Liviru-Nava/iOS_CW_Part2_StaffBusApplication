@@ -7,15 +7,18 @@
 
 import SwiftUI
 import Combine
+import FirebaseAuth
+import FirebaseFirestore
 
 enum RequestStatus: String {
     case pending  = "Pending"
-    case approved = "Approved"
+    case accepted = "Accepted"
     case rejected = "Rejected"
+    case cancelled = "Cancelled"
 }
 
 struct SentRequest: Identifiable {
-    let id = UUID()
+    let id: String
     let routeName: String
     let routeStart: String
     let routeEnd: String
@@ -23,97 +26,67 @@ struct SentRequest: Identifiable {
     let pickupLocation: String
     let dropoffLocation: String
     let session: String
-    let date: Date
+    let submittedDate: Date
     var status: RequestStatus
-}
-
-extension SentRequest {
-    static let mockData: [SentRequest] = [
-        SentRequest(
-            routeName: "Kottawa → Colombo Fort",
-            routeStart: "Kottawa", routeEnd: "Colombo Fort",
-            driverName: "Kamal Perera",
-            pickupLocation: "Kottawa Junction",
-            dropoffLocation: "Colombo Fort",
-            session: "Morning & Evening",
-            date: Calendar.current.date(byAdding: .day, value: -1, to: Date())!,
-            status: .pending
-        ),
-        SentRequest(
-            routeName: "Maharagama → Colombo Fort",
-            routeStart: "Maharagama", routeEnd: "Colombo Fort",
-            driverName: "Nimal Silva",
-            pickupLocation: "Maharagama Town",
-            dropoffLocation: "Union Place",
-            session: "Morning Only",
-            date: Calendar.current.date(byAdding: .day, value: -5, to: Date())!,
-            status: .approved
-        ),
-        SentRequest(
-            routeName: "Nugegoda → Colombo Fort",
-            routeStart: "Nugegoda", routeEnd: "Colombo Fort",
-            driverName: "Suresh Fernando",
-            pickupLocation: "Nugegoda Junction",
-            dropoffLocation: "Town Hall",
-            session: "Evening Only",
-            date: Calendar.current.date(byAdding: .day, value: -10, to: Date())!,
-            status: .rejected
-        ),
-        SentRequest(
-            routeName: "Battaramulla → Colombo Fort",
-            routeStart: "Battaramulla", routeEnd: "Colombo Fort",
-            driverName: "Rohan Perera",
-            pickupLocation: "Battaramulla Stand",
-            dropoffLocation: "Fort",
-            session: "Morning Only",
-            date: Calendar.current.date(byAdding: .day, value: -14, to: Date())!,
-            status: .approved
-        )
-    ]
 }
 
 @MainActor
 final class SentRequestsViewModel: ObservableObject {
-    @Published var requests: [SentRequest] = SentRequest.mockData
+
+    @Published var allLoadedRequests: [SentRequest] = []
     @Published var selectedFilter: FilterOption = .all
     @Published var sortDescending: Bool = true
+    @Published var isLoadingRequests: Bool = false
+    @Published var loadErrorMessage: String? = nil
 
     enum FilterOption: String, CaseIterable {
-        case all      = "All"
-        case pending  = "Pending"
-        case approved = "Approved"
-        case rejected = "Rejected"
+        case all       = "All"
+        case pending   = "Pending"
+        case accepted  = "Accepted"
+        case rejected  = "Rejected"
+        case cancelled = "Cancelled"
     }
 
-    var filteredRequests: [SentRequest] {
-        let filtered: [SentRequest]
+    // nonisolated storage so deinit can safely remove the Firestore listener
+    nonisolated(unsafe) private var firestoreListenerRegistration: ListenerRegistration?
+
+    deinit {
+        firestoreListenerRegistration?.remove()
+    }
+
+    var filteredAndSortedRequests: [SentRequest] {
+        let filteredRequests: [SentRequest]
         switch selectedFilter {
-        case .all:      filtered = requests
-        case .pending:  filtered = requests.filter { $0.status == .pending }
-        case .approved: filtered = requests.filter { $0.status == .approved }
-        case .rejected: filtered = requests.filter { $0.status == .rejected }
+        case .all:       filteredRequests = allLoadedRequests
+        case .pending:   filteredRequests = allLoadedRequests.filter { $0.status == .pending }
+        case .accepted:  filteredRequests = allLoadedRequests.filter { $0.status == .accepted }
+        case .rejected:  filteredRequests = allLoadedRequests.filter { $0.status == .rejected }
+        case .cancelled: filteredRequests = allLoadedRequests.filter { $0.status == .cancelled }
         }
-        return filtered.sorted { sortDescending ? $0.date > $1.date : $0.date < $1.date }
+        return filteredRequests.sorted { sortDescending ? $0.submittedDate > $1.submittedDate : $0.submittedDate < $1.submittedDate }
     }
 
+    // Groups the filtered requests by date label (Today / Yesterday / formatted date)
     var groupedRequests: [(String, [SentRequest])] {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateStyle = .medium
+        let abbreviatedDateFormatter = DateFormatter()
+        abbreviatedDateFormatter.dateStyle = .medium
+
         var requestDictionary: [String: [SentRequest]] = [:]
-        for request in filteredRequests {
-            let key: String
-            if Calendar.current.isDateInToday(request.date) {
-                key = "Today"
-            } else if Calendar.current.isDateInYesterday(request.date) {
-                key = "Yesterday"
+        for request in filteredAndSortedRequests {
+            let groupKey: String
+            if Calendar.current.isDateInToday(request.submittedDate) {
+                groupKey = "Today"
+            } else if Calendar.current.isDateInYesterday(request.submittedDate) {
+                groupKey = "Yesterday"
             } else {
-                key = dateFormatter.string(from: request.date)
+                groupKey = abbreviatedDateFormatter.string(from: request.submittedDate)
             }
-            requestDictionary[key, default: []].append(request)
+            requestDictionary[groupKey, default: []].append(request)
         }
-        return requestDictionary.sorted { a, b in
-            guard let dateA = a.value.first?.date, let dateB = b.value.first?.date else { return false }
-            return sortDescending ? dateA > dateB : dateA < dateB
+        return requestDictionary.sorted { firstGroup, secondGroup in
+            guard let firstDate = firstGroup.value.first?.submittedDate,
+                  let secondDate = secondGroup.value.first?.submittedDate else { return false }
+            return sortDescending ? firstDate > secondDate : firstDate < secondDate
         }
     }
 
@@ -121,19 +94,120 @@ final class SentRequestsViewModel: ObservableObject {
         sortDescending.toggle()
     }
 
+    // Starts a real-time Firestore listener for all join requests submitted by the current user
+    func startListeningForUserRequests() {
+        guard let currentPassengerId = Auth.auth().currentUser?.uid else {
+            print("[SentRequestsVM] No authenticated user — cannot load sent requests")
+            return
+        }
+
+        isLoadingRequests = true
+        firestoreListenerRegistration?.remove()
+
+        firestoreListenerRegistration = Firestore.firestore()
+            .collection("joinRequests")
+            .whereField("passengerId", isEqualTo: currentPassengerId)
+            .order(by: "createdAt", descending: true)
+            .addSnapshotListener { [weak self] snapshot, listenerError in
+                guard let self else { return }
+                if let listenerError {
+                    print("[SentRequestsVM] Listener error: \(listenerError.localizedDescription)")
+                    Task { @MainActor in
+                        self.loadErrorMessage = "Could not load requests. Please try again."
+                        self.isLoadingRequests = false
+                    }
+                    return
+                }
+                guard let snapshotDocuments = snapshot?.documents else { return }
+
+                Task {
+                    await self.buildRequestModels(fromDocuments: snapshotDocuments)
+                }
+            }
+    }
+
+    // Builds SentRequest models from Firestore documents, fetching route/driver names as needed
+    private func buildRequestModels(fromDocuments documents: [QueryDocumentSnapshot]) async {
+        var builtRequests: [SentRequest] = []
+
+        for document in documents {
+            let documentData = document.data()
+            let documentId = document.documentID
+
+            let routeId        = documentData["routeId"]      as? String ?? ""
+            let driverId       = documentData["driverId"]     as? String ?? ""
+            let pickupStop     = documentData["pickupStop"]   as? String ?? ""
+            let dropoffStop    = documentData["dropoffStop"]  as? String ?? ""
+            let sessionString  = documentData["session"]      as? String ?? "Both"
+            let statusString   = documentData["status"]       as? String ?? "pending"
+
+            // createdAt is stored as a Firestore Timestamp
+            let submittedDate: Date
+            if let firestoreTimestamp = documentData["createdAt"] as? Timestamp {
+                submittedDate = firestoreTimestamp.dateValue()
+            } else {
+                submittedDate = Date()
+            }
+
+            let mappedStatus: RequestStatus
+            switch statusString {
+            case "accepted":  mappedStatus = .accepted
+            case "rejected":  mappedStatus = .rejected
+            case "cancelled": mappedStatus = .cancelled
+            default:          mappedStatus = .pending
+            }
+
+            // Fetch route details to get start and end location names
+            var routeStartName = "Unknown"
+            var routeEndName   = "Unknown"
+            if !routeId.isEmpty,
+               let fetchedRoute = try? await RouteService.shared.fetchRoute(routeId: routeId) {
+                routeStartName = fetchedRoute.startLocation.locationName
+                routeEndName   = fetchedRoute.endLocation.locationName
+            }
+
+            // Fetch driver details to get the driver name
+            var driverDisplayName = "Driver"
+            if !driverId.isEmpty,
+               let fetchedDriver = try? await DriverService.shared.fetchDriver(driverId: driverId) {
+                driverDisplayName = fetchedDriver.fullName
+            }
+
+            let builtRequest = SentRequest(
+                id:               documentId,
+                routeName:        "\(routeStartName) → \(routeEndName)",
+                routeStart:       routeStartName,
+                routeEnd:         routeEndName,
+                driverName:       driverDisplayName,
+                pickupLocation:   pickupStop,
+                dropoffLocation:  dropoffStop,
+                session:          sessionString,
+                submittedDate:    submittedDate,
+                status:           mappedStatus
+            )
+            builtRequests.append(builtRequest)
+        }
+
+        self.allLoadedRequests = builtRequests
+        self.isLoadingRequests = false
+        print("[SentRequestsVM] Loaded \(builtRequests.count) request(s) for current user")
+    }
+
     func statusColor(for status: RequestStatus) -> Color {
         switch status {
-        case .pending:  return Color.statusWarning
-        case .approved: return Color.statusActive
-        case .rejected: return Color.statusDanger
+        case .pending:   return Color.statusWarning
+        case .accepted:  return Color.statusActive
+        case .rejected:  return Color.statusDanger
+        case .cancelled: return Color.statusInactive
         }
     }
 
     func statusIcon(for status: RequestStatus) -> String {
         switch status {
-        case .pending:  return "clock.fill"
-        case .approved: return "checkmark.circle.fill"
-        case .rejected: return "xmark.circle.fill"
+        case .pending:   return "clock.fill"
+        case .accepted:  return "checkmark.circle.fill"
+        case .rejected:  return "xmark.circle.fill"
+        case .cancelled: return "minus.circle.fill"
         }
     }
 }

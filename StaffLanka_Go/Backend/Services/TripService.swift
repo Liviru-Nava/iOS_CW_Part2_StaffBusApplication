@@ -33,7 +33,7 @@ final class TripService {
             startedAt: now
         )
         let ref = try db.collection(collection).addDocument(from: model)
-        print("🟢 [TripService] Trip started — id: \(ref.documentID) session: \(session)")
+        print(" [TripService] Trip started — id: \(ref.documentID) session: \(session)")
         return ref.documentID
     }
 
@@ -44,7 +44,7 @@ final class TripService {
             "status":  "completed",
             "endedAt": Timestamp(date: Date())
         ])
-        print("🟢 [TripService] Trip completed — id: \(tripId)")
+        print(" [TripService] Trip completed — id: \(tripId)")
     }
 
     // Driver: update live location
@@ -69,12 +69,12 @@ final class TripService {
         session: String,
         onChange: @escaping (TripModel?) -> Void
     ) -> ListenerRegistration {
-        print("🔵 [TripService] Attaching trip listener — driverId: \(driverId) session: \(session)")
+        print("[TripService] Attaching trip listener — driverId: \(driverId) session: \(session)")
         return db.collection(collection)
             .whereField("driverId", isEqualTo: driverId)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
-                    print("🔴 [TripService] Listener error: \(error.localizedDescription)")
+                    print(" [TripService] Listener error: \(error.localizedDescription)")
                     onChange(nil)
                     return
                 }
@@ -90,7 +90,7 @@ final class TripService {
                     $0.session == session &&
                     Calendar.current.startOfDay(for: $0.tripDate) == today
                 })
-                print("🟢 [TripService] Listener fired — \(trips.count) total, today's \(session): \(todayTrip?.status ?? "none") id: \(todayTrip?.id ?? "none")")
+                print(" [TripService] Listener fired — \(trips.count) total, today's \(session): \(todayTrip?.status ?? "none") id: \(todayTrip?.id ?? "none")")
                 onChange(todayTrip)
             }
     }
@@ -113,7 +113,7 @@ final class TripService {
         return db.collection(collection).document(tripId)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
-                    print("🔴 [TripService] Trip listener error: \(error.localizedDescription)")
+                    print(" [TripService] Trip listener error: \(error.localizedDescription)")
                     onChange(nil)
                     return
                 }
@@ -127,7 +127,7 @@ final class TripService {
 
     func saveTripHistoryRecord(_ record: DriverHistoryTripRecord) async throws {
         let _ = try db.collection("tripHistory").addDocument(from: record)
-        print("🟢 [TripService] Saved trip history record for route: \(record.routeId)")
+        print(" [TripService] Saved trip history record for route: \(record.routeId)")
     }
 
     func fetchDriverTripHistory(driverId: String) async throws -> [DriverHistoryTripRecord] {

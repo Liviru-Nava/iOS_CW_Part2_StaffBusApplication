@@ -621,6 +621,8 @@ final class PassengerDashboardViewModel: ObservableObject {
 
         return EnrolledService(
             id: docId,
+            routeId: req.routeId,
+            driverId: req.driverId,
             routeName: "\(route.startLocation.locationName) → \(route.endLocation.locationName)",
             routeStart: req.pickupStop,
             routeEnd: req.dropoffStop,
