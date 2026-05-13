@@ -9,6 +9,7 @@ import MapKit
 
 struct DriverRouteScheduleView: View {
     @StateObject var vm: DriverRouteScheduleViewModel
+    @FocusState private var isPriceFieldFocused: Bool
 
     var body: some View {
         ZStack {
@@ -18,10 +19,8 @@ struct DriverRouteScheduleView: View {
                 VStack(spacing: 24) {
                     headerSection
                     routeDetails
-                    if vm.startCoordinate != nil || vm.endCoordinate != nil {
-                        fitRouteButton
-                    }
                     stopsSection
+                    fitRouteButton_afterStops
                     scheduleSection
                     pricingSection
                     submitButton
@@ -29,6 +28,8 @@ struct DriverRouteScheduleView: View {
                 .padding(.horizontal, 0)
                 .padding(.top, 8)
                 .padding(.bottom, 48)
+                .contentShape(Rectangle())
+                .onTapGesture { isPriceFieldFocused = false }
             }
         }
         .navigationTitle("Route & Schedule")
@@ -191,21 +192,25 @@ struct DriverRouteScheduleView: View {
         }
     }
 
-    private var fitRouteButton: some View {
-        Button { vm.flyToRoute() } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "scope").font(.system(size: 14))
-                Text("Preview Route on Map").font(.system(size: 14, weight: .medium))
+    private var fitRouteButton_afterStops: some View {
+        Group {
+            if vm.startCoordinate != nil && (vm.endCoordinate != nil || !vm.stops.isEmpty) {
+                Button { vm.flyToRoute() } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "map.fill").font(.system(size: 14))
+                        Text("Preview Route on Map").font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundStyle(Color.brandAccent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.brandAccent.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.brandAccent.opacity(0.25), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
             }
-            .foregroundStyle(Color.brandAccent)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Color.brandAccent.opacity(0.10))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.brandAccent.opacity(0.25), lineWidth: 1))
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 16)
     }
 
     private var stopsSection: some View {
@@ -424,6 +429,15 @@ struct DriverRouteScheduleView: View {
                     .multilineTextAlignment(.trailing)
                     .frame(width: 80)
                     .tint(Color.brandAccent)
+                    .focused($isPriceFieldFocused)
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button("Done") { isPriceFieldFocused = false }
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Color.brandAccent)
+                        }
+                    }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -742,10 +756,24 @@ struct RouteMapView: UIViewRepresentable {
         }
         map.removeAnnotations(map.annotations.filter { !($0 is MKUserLocation) })
         map.removeOverlays(map.overlays)
-        var coords: [CLLocationCoordinate2D] = []
-        for item in annotations { map.addAnnotation(RouteAnnotation(item: item)); coords.append(item.coordinate) }
+
+        // Add annotations for all confirmed points
+        for item in annotations { map.addAnnotation(RouteAnnotation(item: item)) }
         if let pin = pendingPin { map.addAnnotation(RouteAnnotation(item: pin)) }
-        if coords.count >= 2 { map.addOverlay(MKPolyline(coordinates: coords, count: coords.count)) }
+
+        // Build ordered polyline: Start → Stops (by subtitle order) → End
+        var orderedCoords: [CLLocationCoordinate2D] = []
+        let startPoints  = annotations.filter { $0.subtitle == "Start" }
+        let endPoints    = annotations.filter { $0.subtitle == "End" }
+        let stopPoints   = annotations.filter { $0.subtitle != "Start" && $0.subtitle != "End" && $0.subtitle != "pending" }
+
+        if let start = startPoints.first { orderedCoords.append(start.coordinate) }
+        orderedCoords.append(contentsOf: stopPoints.map(\.coordinate))
+        if let end = endPoints.first { orderedCoords.append(end.coordinate) }
+
+        if orderedCoords.count >= 2 {
+            map.addOverlay(MKPolyline(coordinates: orderedCoords, count: orderedCoords.count))
+        }
     }
 
     class Coordinator: NSObject, MKMapViewDelegate {

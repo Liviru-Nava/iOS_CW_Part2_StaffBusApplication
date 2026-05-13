@@ -5,7 +5,6 @@
 //  Created by Liviru Navaratna on 2026-05-09.
 //
 
-
 import SwiftUI
 
 // Two-screen flow for changing the passenger phone number, mirrors DriverChangePhoneView exactly
@@ -160,7 +159,7 @@ struct PassengerChangePhoneView: View {
     }
 }
 
-// OTP confirmation screen where the passenger enters the 6-digit code
+
 struct PassengerConfirmPhoneOTPView: View {
 
     let newPhoneNumberBeingVerified: String
@@ -168,6 +167,7 @@ struct PassengerConfirmPhoneOTPView: View {
     @ObservedObject var passengerProfileViewModel: PassengerProfileViewModel
 
     @State private var otpDigitsEnteredByPassenger: [String] = Array(repeating: "", count: 6)
+    @State private var currentlyActiveBoxIndex: Int = 0
     @State private var otpVerificationShakeOffset: CGFloat = 0
     @State private var otpVerificationCountdownSeconds: Int = 30
     @State private var isVerifyingEnteredOTPCode: Bool = false
@@ -182,7 +182,11 @@ struct PassengerConfirmPhoneOTPView: View {
 
     var body: some View {
         ZStack {
+            // Background tap dismisses the number pad (Issue 1 / keyboard fix).
             Color.appBackground.ignoresSafeArea()
+                .onTapGesture {
+                    isHiddenOTPInputFocused = false
+                }
 
             VStack(spacing: 32) {
                 otpConfirmationHeaderSection
@@ -242,37 +246,15 @@ struct PassengerConfirmPhoneOTPView: View {
     private var otpDigitBoxesRow: some View {
         HStack(spacing: 10) {
             ForEach(0..<6, id: \.self) { digitIndex in
-                passengerOTPDigitBox(digitIndex: digitIndex)
-                    .onTapGesture {
-                        isHiddenOTPInputFocused = true
-                    }
-            }
-        }
-    }
-
-    private func passengerOTPDigitBox(digitIndex: Int) -> some View {
-        let digitCharacter: String = {
-            let characters = Array(enteredOTPCodeJoined)
-            return digitIndex < characters.count ? String(characters[digitIndex]) : ""
-        }()
-        let isThisBoxFilled = digitIndex < enteredOTPCodeJoined.count
-
-        return ZStack {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.cardBackground)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(
-                            isThisBoxFilled ? Color.brandAccent : Color.divider,
-                            lineWidth: isThisBoxFilled ? 2 : 1
-                        )
+                OTPDigitBox(
+                    digit: otpDigitsEnteredByPassenger[digitIndex],
+                    isActive: currentlyActiveBoxIndex == digitIndex
                 )
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-
-            Text(digitCharacter)
-                .font(.system(size: 22, weight: .bold, design: .monospaced))
-                .foregroundStyle(Color.textPrimary)
+                .onTapGesture {
+                    currentlyActiveBoxIndex = digitIndex
+                    isHiddenOTPInputFocused = true
+                }
+            }
         }
     }
 
@@ -286,6 +268,7 @@ struct PassengerConfirmPhoneOTPView: View {
                         ? String(digitsOnlyFromInput[digitsOnlyFromInput.index(digitsOnlyFromInput.startIndex, offsetBy: digitIndex)])
                         : ""
                 }
+                currentlyActiveBoxIndex = min(digitsOnlyFromInput.count, 5)
             }
         ))
         .keyboardType(.numberPad)

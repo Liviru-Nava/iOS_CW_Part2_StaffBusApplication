@@ -39,6 +39,9 @@ struct PassengerDashboard: View {
         }
         .background(Color.appBackground.ignoresSafeArea())
         .ignoresSafeArea(edges: .top)
+        .onTapGesture {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
         .navigationDestination(isPresented: $showRouteSearch) {
             RouteSearchView()
         }

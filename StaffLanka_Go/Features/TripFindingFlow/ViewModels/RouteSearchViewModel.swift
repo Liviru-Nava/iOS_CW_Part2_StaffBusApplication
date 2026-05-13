@@ -97,24 +97,44 @@ final class RouteSearchViewModel: ObservableObject {
                 let allRoutes = try await RouteService.shared.fetchAllRoutes()
                 print("[SUCCESS] [RouteSearch] Total routes in Firestore: \(allRoutes.count)")
 
+                let pQuery = pickup.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                let dQuery = destination.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
                 let matchingRoutes = allRoutes.filter { route in
+                    
+                    // Build the ordered sequence of all location names on this route
+                    // (start → stops in order → end), all lowercased and trimmed.
                     var sequence: [String] = []
-                    sequence.append(route.startLocation.locationName.localizedCaseInsensitiveCompare(pickup.name) == .orderedSame ? pickup.name.lowercased() : route.startLocation.locationName.lowercased())
-                    
+                    sequence.append(route.startLocation.locationName
+                        .trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+
                     let sortedStops = route.routeStops.sorted { $0.stopOrder < $1.stopOrder }
-                    sequence.append(contentsOf: sortedStops.map { $0.stopName.lowercased() })
-                    
-                    sequence.append(route.endLocation.locationName.localizedCaseInsensitiveCompare(destination.name) == .orderedSame ? destination.name.lowercased() : route.endLocation.locationName.lowercased())
-                    
-                    let pQuery = pickup.name.lowercased()
-                    let dQuery = destination.name.lowercased()
-                    
-                    if let pIndex = sequence.firstIndex(of: pQuery), let dIndex = sequence.lastIndex(of: dQuery) {
-                        return pIndex < dIndex // Must be traveling in the correct direction
+                    sequence.append(contentsOf: sortedStops.map {
+                        $0.stopName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    })
+
+                    sequence.append(route.endLocation.locationName
+                        .trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+
+                    print("[DEBUG] [RouteSearch] Route \(route.id ?? "?"): sequence = \(sequence)")
+
+
+                    guard let pIndex = sequence.firstIndex(of: pQuery),
+                          let dIndex = sequence.lastIndex(of: dQuery) else {
+                        print("[DEBUG] [RouteSearch] Route \(route.id ?? "?") — pickup '\(pQuery)' or destination '\(dQuery)' not found in sequence")
+                        return false
                     }
-                    return false
+
+                    // Allow either direction — swapping pickup/destination still belongs to the same route
+                    guard pIndex != dIndex else {
+                        print("[DEBUG] [RouteSearch] Route \(route.id ?? "?") — pickup and destination are the same stop, skipping")
+                        return false
+                    }
+
+                    print("[DEBUG] [RouteSearch] Route \(route.id ?? "?") MATCHED — pIndex=\(pIndex) dIndex=\(dIndex)")
+                    return true
                 }
-                print("[WARNING] [RouteSearch] Matching routes after filter: \(matchingRoutes.count)")
+                print("[INFO] [RouteSearch] Matching routes after filter: \(matchingRoutes.count)")
 
                 var results: [PassengerRouteResult] = []
 
@@ -131,7 +151,7 @@ final class RouteSearchViewModel: ObservableObject {
                         print("[INFO] [RouteSearch] Fetching driver document: drivers/\(route.ownerDriverId)")
                         let driver = try await DriverService.shared.fetchDriver(driverId: route.ownerDriverId)
                         print("[SUCCESS] [RouteSearch] Driver fetched: '\(driver.fullName)' | bus: '\(driver.busInformation.busName)' | plate: '\(driver.busInformation.plateNumber)'")
-                        
+
                         guard driver.isAcceptingRequests == true else {
                             print("[WARNING] [RouteSearch] Driver \(driver.fullName) is not accepting requests, skipping.")
                             continue

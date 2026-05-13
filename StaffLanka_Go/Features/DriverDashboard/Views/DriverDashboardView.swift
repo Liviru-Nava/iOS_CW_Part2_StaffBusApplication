@@ -27,6 +27,9 @@ struct DriverDashboardView: View {
         }
         .background(Color.appBackground.ignoresSafeArea())
         .ignoresSafeArea(edges: .top)
+        .onTapGesture {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
         .onAppear {
             dashboardViewModel.fetchDriverData()
             NotificationManager.shared.requestPermissions()
@@ -852,9 +855,8 @@ struct RouteMapFullscreenView: View {
 
             }
 
-            // Close button overlay
+            // Close button overlay — top LEFT per design spec
             HStack {
-                Spacer()
                 Button {
                     isPresented = false
                 } label: {
@@ -866,8 +868,9 @@ struct RouteMapFullscreenView: View {
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .padding(.trailing, 16)
+                .padding(.leading, 16)
                 .padding(.top, 44)
+                Spacer()
             }
         }
     }

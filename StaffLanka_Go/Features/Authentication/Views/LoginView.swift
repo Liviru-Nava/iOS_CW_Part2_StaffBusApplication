@@ -13,11 +13,13 @@ struct LoginView: View {
     @EnvironmentObject private var authManager: AuthManager
     @State private var navigateToOTPVerification = false
     @State private var isBiometricAuthenticationInProgress = false
+    @FocusState private var isPhoneFieldFocused: Bool
 
     var body: some View {
         NavigationStack {
             ZStack {
                 Color.appBackground.ignoresSafeArea()
+                    .onTapGesture { isPhoneFieldFocused = false }
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
@@ -101,6 +103,7 @@ struct LoginView: View {
                     .padding(.horizontal, 14)
                     .frame(height: 52)
                     .frame(maxWidth: .infinity)
+                    .focused($isPhoneFieldFocused)
             }
             .background(Color.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 14))

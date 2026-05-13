@@ -12,7 +12,7 @@ struct DriverOTPView: View {
     let personalInfoViewModel: DriverPersonalInfoViewModel
 
     @StateObject private var otpViewModel: DriverOTPViewModel
-    @State private var activeIndex: Int = 0
+    @State private var currentlyActiveBoxIndex: Int = 0
     @FocusState private var inputFocused: Bool
 
     init(phoneNumber: String, personalInfoViewModel: DriverPersonalInfoViewModel) {
@@ -23,7 +23,11 @@ struct DriverOTPView: View {
 
     var body: some View {
         ZStack {
+            // Background tap dismisses the number pad (consistent with login OTP screen).
             Color.appBackground.ignoresSafeArea()
+                .onTapGesture {
+                    inputFocused = false
+                }
 
             VStack(spacing: 32) {
                 headerSection
@@ -86,41 +90,19 @@ struct DriverOTPView: View {
         }
     }
 
+
     private var otpBoxRow: some View {
         HStack(spacing: 10) {
             ForEach(0..<6, id: \.self) { i in
-                driverOTPBox(index: i)
-                    .onTapGesture {
-                        activeIndex = i
-                        inputFocused = true
-                    }
-            }
-        }
-    }
-
-    private func driverOTPBox(index: Int) -> some View {
-        let digit: String = {
-            let chars = Array(otpViewModel.enteredOTP)
-            return index < chars.count ? String(chars[index]) : ""
-        }()
-        let isFilled = index < otpViewModel.enteredOTP.count
-
-        return ZStack {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.cardBackground)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(
-                            isFilled ? Color.brandAccent : Color.divider,
-                            lineWidth: isFilled ? 2 : 1
-                        )
+                OTPDigitBox(
+                    digit: otpViewModel.otpDigits[i],
+                    isActive: currentlyActiveBoxIndex == i
                 )
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-
-            Text(digit)
-                .font(.system(size: 22, weight: .bold, design: .monospaced))
-                .foregroundStyle(Color.textPrimary)
+                .onTapGesture {
+                    currentlyActiveBoxIndex = i
+                    inputFocused = true
+                }
+            }
         }
     }
 
@@ -134,7 +116,7 @@ struct DriverOTPView: View {
                         ? String(digits[digits.index(digits.startIndex, offsetBy: i)])
                         : ""
                 }
-                activeIndex = min(digits.count, 5)
+                currentlyActiveBoxIndex = min(digits.count, 5)
             }
         ))
         .keyboardType(.numberPad)

@@ -255,7 +255,7 @@ struct PassengerCostTrackingView: View {
             Spacer(minLength: 80)
             ZStack {
                 Circle().fill(Color.brandAccent.opacity(0.10)).frame(width: 96, height: 96)
-                Image(systemName: "creditcard.slash").font(.system(size: 38)).foregroundColor(Color.brandAccent)
+                Image(systemName: "creditcard.fill").font(.system(size: 38)).foregroundColor(Color.brandAccent)
             }
             Text("No Registered Service").font(.system(size: 22, weight: .bold)).foregroundColor(.textPrimary)
             Text("You don't have any registered bus service yet.\nOnce you join a route, your cost tracking will appear here.")
