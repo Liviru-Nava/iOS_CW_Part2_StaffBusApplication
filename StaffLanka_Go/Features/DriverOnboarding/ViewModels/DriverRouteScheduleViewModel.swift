@@ -441,7 +441,9 @@ final class DriverRouteScheduleViewModel: ObservableObject {
                 licenseNumber: upstreamPersonalInfoViewModel.licenseNumber,
                 busInformation: busInfoForDriverRecord,
                 assignedRouteId: createdRouteId,
-                driverCreatedAt: Date()
+                driverCreatedAt: Date(),
+                serviceStatus: "active",
+                isAcceptingRequests: true
             )
 
             try await DriverService.shared.createDriver(driverRecord: newDriverRecord)

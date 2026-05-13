@@ -25,6 +25,9 @@ struct OTPVerificationView: View {
     var body: some View {
         ZStack {
             Color.appBackground.ignoresSafeArea()
+                .onTapGesture {
+                    hiddenFieldFocused = false
+                }
 
             VStack(spacing: 32) {
                 headerSection

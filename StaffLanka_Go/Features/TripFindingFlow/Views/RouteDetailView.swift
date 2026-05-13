@@ -446,7 +446,7 @@ struct RouteDetailView: View {
             Divider().background(Color.divider)
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Both Trips / Day")
+                    Text("Both Trips / Month")
                         .font(.system(size: 11))
                         .foregroundStyle(Color.textTertiary)
                     Text(routeDetailViewModel.bothPriceLabel)
@@ -495,31 +495,27 @@ struct FullRouteMapView: View {
     let tripType: RouteDetailViewModel.TripType
     @Environment(\.dismiss) private var dismiss
 
+    @State private var routePolyline: MKPolyline?
+
     var navigationBarTitle: String {
         tripType == .morning ? "Morning Route" : "Evening Route"
     }
 
+    // Build ordered stops: for evening, reverse the list
+    private var orderedStops: [PassengerStop] {
+        tripType == .morning ? stops : stops.reversed()
+    }
+
     var body: some View {
         NavigationStack {
-            Map {
-                ForEach(stops) { stop in
-                    Annotation(stop.name, coordinate: stop.coordinate) {
-                        VStack(spacing: 2) {
-                            Text(stop.name)
-                                .font(.system(size: 9, weight: .medium))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 3)
-                                .background(Color.white.opacity(0.9))
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                                .shadow(radius: 1)
-                            Image(systemName: "mappin.circle.fill")
-                                .font(.system(size: 18))
-                                .foregroundStyle(Color.brandAccent)
-                        }
-                    }
-                }
+            ZStack {
+                FullRouteMapUIView(
+                    stops: orderedStops,
+                    routePolyline: $routePolyline
+                )
+                .ignoresSafeArea(edges: .bottom)
+                .task { await calculateDirections() }
             }
-            .ignoresSafeArea(edges: .bottom)
             .navigationTitle(navigationBarTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -535,9 +531,162 @@ struct FullRouteMapView: View {
             }
         }
     }
+
+    private func calculateDirections() async {
+        guard orderedStops.count >= 2 else { return }
+        var waypoints = orderedStops.map(\.coordinate)
+        var allCoordinates: [CLLocationCoordinate2D] = []
+
+        for i in 0..<(waypoints.count - 1) {
+            let request = MKDirections.Request()
+            request.source      = MKMapItem(placemark: MKPlacemark(coordinate: waypoints[i]))
+            request.destination = MKMapItem(placemark: MKPlacemark(coordinate: waypoints[i + 1]))
+            request.transportType = .automobile
+            do {
+                let directions = MKDirections(request: request)
+                let response = try await directions.calculate()
+                if let firstRoute = response.routes.first {
+                    let count = firstRoute.polyline.pointCount
+                    var coords = [CLLocationCoordinate2D](repeating: kCLLocationCoordinate2DInvalid, count: count)
+                    firstRoute.polyline.getCoordinates(&coords, range: NSRange(location: 0, length: count))
+                    if i > 0 && !coords.isEmpty { coords.removeFirst() }
+                    allCoordinates.append(contentsOf: coords)
+                }
+            } catch {
+                // Fallback: straight line between waypoints
+                if i > 0 { allCoordinates.append(waypoints[i]) } else { allCoordinates.append(waypoints[i]) }
+                allCoordinates.append(waypoints[i + 1])
+            }
+        }
+        routePolyline = MKPolyline(coordinates: allCoordinates, count: allCoordinates.count)
+    }
 }
 
-// Kept for compatibility with any existing code that references MapStop directly
+
+struct FullRouteMapUIView: UIViewRepresentable {
+    let stops: [PassengerStop]
+    @Binding var routePolyline: MKPolyline?
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> MKMapView {
+        let map = MKMapView()
+        map.delegate = context.coordinator
+        map.showsUserLocation = true
+        map.showsCompass = true
+
+        // Fit map to all stops
+        if stops.count >= 2 {
+            var region = MKCoordinateRegion(
+                coordinates: stops.map(\.coordinate),
+                insets: UIEdgeInsets(top: 60, left: 40, bottom: 60, right: 40)
+            )
+            map.setRegion(region, animated: false)
+        } else if let first = stops.first {
+            map.setRegion(
+                MKCoordinateRegion(center: first.coordinate,
+                                   span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)),
+                animated: false)
+        }
+        return map
+    }
+
+    func updateUIView(_ map: MKMapView, context: Context) {
+        map.removeAnnotations(map.annotations.filter { !($0 is MKUserLocation) })
+        map.removeOverlays(map.overlays)
+
+        for (index, stop) in stops.enumerated() {
+            let ann = FullRouteAnnotation(
+                title: stop.name,
+                subtitle: index == 0 ? "Start"
+                        : index == stops.count - 1 ? "End"
+                        : "Stop \(index)",
+                stopIndex: index,
+                totalStops: stops.count,
+                coordinate: stop.coordinate
+            )
+            map.addAnnotation(ann)
+        }
+
+        if let poly = routePolyline {
+            map.addOverlay(poly)
+        }
+    }
+
+    class Coordinator: NSObject, MKMapViewDelegate {
+        func mapView(_ map: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            guard let ann = annotation as? FullRouteAnnotation else { return nil }
+            let v = map.dequeueReusableAnnotationView(withIdentifier: "fullpin")
+                    as? MKMarkerAnnotationView
+                    ?? MKMarkerAnnotationView(annotation: ann, reuseIdentifier: "fullpin")
+            v.annotation     = ann
+            v.canShowCallout = true
+            v.animatesWhenAdded = true
+
+            if ann.subtitle == "Start" {
+                v.markerTintColor = UIColor.systemGreen
+                v.glyphImage = UIImage(systemName: "flag.fill")
+                v.titleVisibility = .visible
+            } else if ann.subtitle == "End" {
+                v.markerTintColor = UIColor.systemRed
+                v.glyphImage = UIImage(systemName: "flag.checkered")
+                v.titleVisibility = .visible
+            } else {
+                v.markerTintColor = UIColor.systemBlue
+                v.glyphText       = "\(ann.stopIndex)"
+                v.titleVisibility = .adaptive
+            }
+            return v
+        }
+
+        func mapView(_ map: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            guard let poly = overlay as? MKPolyline else { return MKOverlayRenderer(overlay: overlay) }
+            let r = MKPolylineRenderer(polyline: poly)
+            r.strokeColor = UIColor.systemBlue.withAlphaComponent(0.75)
+            r.lineWidth = 4
+            r.lineCap = .round
+            r.lineJoin = .round
+            return r
+        }
+    }
+}
+
+class FullRouteAnnotation: NSObject, MKAnnotation {
+    var title: String?
+    var subtitle: String?
+    let stopIndex: Int
+    let totalStops: Int
+    var coordinate: CLLocationCoordinate2D
+
+    init(title: String, subtitle: String, stopIndex: Int, totalStops: Int, coordinate: CLLocationCoordinate2D) {
+        self.title      = title
+        self.subtitle   = subtitle
+        self.stopIndex  = stopIndex
+        self.totalStops = totalStops
+        self.coordinate = coordinate
+    }
+}
+
+
+extension MKCoordinateRegion {
+    init(coordinates: [CLLocationCoordinate2D], insets: UIEdgeInsets = .zero) {
+        guard !coordinates.isEmpty else {
+            self = MKCoordinateRegion()
+            return
+        }
+        let minLat = coordinates.map(\.latitude).min()!
+        let maxLat = coordinates.map(\.latitude).max()!
+        let minLon = coordinates.map(\.longitude).min()!
+        let maxLon = coordinates.map(\.longitude).max()!
+        let center = CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2,
+                                            longitude: (minLon + maxLon) / 2)
+        let spanLat = max((maxLat - minLat) * 1.4, 0.01)
+        let spanLon = max((maxLon - minLon) * 1.4, 0.01)
+        self = MKCoordinateRegion(center: center,
+                                  span: MKCoordinateSpan(latitudeDelta: spanLat, longitudeDelta: spanLon))
+    }
+}
+
 struct MapStop: Identifiable {
     let id: String
     let name: String
