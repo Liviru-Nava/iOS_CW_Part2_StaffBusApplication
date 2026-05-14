@@ -1,0 +1,30 @@
+{
+  "configurations" : [
+    {
+      "id" : "DCFE5F35-B0C9-45DA-8169-DB7A31A4E4AD",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:StaffLanka_Go.xcodeproj",
+      "identifier" : "5A826B422F7191960044237A",
+      "name" : "StaffLanka_Go"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:StaffLanka_Go.xcodeproj",
+        "identifier" : "5A240F552FB5B7EF00729737",
+        "name" : "StaffLanka_GoTests"
+      }
+    }
+  ],
+  "version" : 1
+}
