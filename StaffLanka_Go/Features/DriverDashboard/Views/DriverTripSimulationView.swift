@@ -2,6 +2,7 @@
 //  DriverTripSimulationView.swift
 //  StaffLanka_Go
 //
+//  Created by Liviru Navaratna on 2026-05-11
 
 import SwiftUI
 import MapKit
@@ -526,7 +527,7 @@ struct PaginatedPassengerSummaryView: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 3) {
                 pickedUpBadge(wasPickedUp: row.wasPickedUp)
-                attendanceBadge(status: row.attendanceStatusLabel)
+                attendanceBadgeIfMeaningful(status: row.attendanceStatusLabel)
             }
         }
         .padding(.horizontal, 12)
@@ -546,17 +547,21 @@ struct PaginatedPassengerSummaryView: View {
         .clipShape(Capsule())
     }
 
-    private func attendanceBadge(status: String) -> some View {
+    @ViewBuilder
+    private func attendanceBadgeIfMeaningful(status: String) -> some View {
         let isAttending = status == "attending"
         let isNotSure = status == "not_sure"
-        let color: Color = isAttending ? Color.brandAccent : (isNotSure ? Color.statusWarning : Color.statusDanger)
-        let label = isAttending ? "Attending" : (isNotSure ? "Not Sure" : (status == "absent" ? "Absent" : "Not Marked"))
-        return Text(label)
-            .font(.system(size: 9, weight: .medium))
-            .foregroundStyle(color)
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(color.opacity(0.1))
-            .clipShape(Capsule())
+        let isAbsent = status == "absent"
+        if isAttending || isNotSure || isAbsent {
+            let color: Color = isAttending ? Color.brandAccent : (isNotSure ? Color.statusWarning : Color.statusDanger)
+            let label = isAttending ? "Attending" : (isNotSure ? "Not Sure" : "Absent")
+            Text(label)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(color)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(color.opacity(0.1))
+                .clipShape(Capsule())
+        }
     }
 }
 

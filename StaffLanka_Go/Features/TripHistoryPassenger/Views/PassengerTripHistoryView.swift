@@ -244,10 +244,6 @@ struct TripDayCard: View {
                         .font(.system(size: 11))
                         .foregroundColor(.textTertiary)
                         .lineLimit(1)
-                } else if !attended {
-                    Text("Did not board the bus")
-                        .font(.system(size: 12))
-                        .foregroundColor(.textTertiary)
                 }
             }
 
@@ -397,7 +393,7 @@ struct TripDayDetailSheet: View {
                     Image(systemName: "info.circle")
                         .font(.system(size: 13))
                         .foregroundColor(.textTertiary)
-                    Text("You did not board the bus for this session.")
+                    Text("This session was skipped.")
                         .font(.system(size: 13))
                         .foregroundColor(.textTertiary)
                 }

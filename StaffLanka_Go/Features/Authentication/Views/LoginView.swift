@@ -33,9 +33,6 @@ struct LoginView: View {
                             if loginViewModel.shouldShowBiometricLoginButton {
                                 biometricDividerRow
                                 biometricLoginButton
-                            } else {
-                                dividerRow
-                                socialRow
                             }
                             driverRegisterRow
                         }
@@ -188,35 +185,6 @@ struct LoginView: View {
             )
         }
         .disabled(isBiometricAuthenticationInProgress)
-    }
-
-    private var dividerRow: some View {
-        HStack(spacing: 12) {
-            Rectangle().fill(Color.divider).frame(height: 1)
-            Text("or sign in with")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundColor(.textSecondary)
-                .fixedSize()
-            Rectangle().fill(Color.divider).frame(height: 1)
-        }
-        .padding(.vertical, 4)
-    }
-
-    private var socialRow: some View {
-        HStack(spacing: 20) {
-            Button {
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(Color.cardBackground)
-                        .frame(width: 56, height: 56)
-                        .overlay(Circle().stroke(Color.divider, lineWidth: 1.5))
-                    Image(systemName: "apple.logo")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundColor(.textPrimary)
-                }
-            }
-        }
     }
 
     private var driverRegisterRow: some View {
