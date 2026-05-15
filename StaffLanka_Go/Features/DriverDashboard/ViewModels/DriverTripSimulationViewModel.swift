@@ -2,11 +2,7 @@
 //  DriverTripSimulationViewModel.swift
 //  StaffLanka_Go
 //
-
-//
-//  DriverTripSimulationViewModel.swift
-//  StaffLanka_Go
-//
+//  Created by Liviru Navaratna on 2026-05-11
 
 import Foundation
 import MapKit

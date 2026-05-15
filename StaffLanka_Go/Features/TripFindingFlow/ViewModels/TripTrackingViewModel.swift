@@ -96,6 +96,7 @@ final class TripTrackingViewModel: ObservableObject {
 
         let safeCurrentStopIndex = min(currentStopIndex, allRouteStops.count - 1)
 
+        // reversing the drop off point instead of using the pickup point names
         let indexOfPassengerPickupStop = allRouteStops.firstIndex(of: passengerPickupStopName) ?? allRouteStops.count - 1
         let indexOfPassengerDropOffStop = allRouteStops.firstIndex(of: passengerDropOffStopName) ?? allRouteStops.count - 1
 
@@ -120,11 +121,15 @@ final class TripTrackingViewModel: ObservableObject {
             0
         )
 
+        // For evening sessions the notification stop names need to reflect the reversed direction
+        let relevantPickupLabel = sessionLabel == "Evening" ? passengerDropOffStopName : passengerPickupStopName
+        let relevantDropOffLabel = sessionLabel == "Evening" ? passengerPickupStopName : passengerDropOffStopName
+
         NotificationManager.shared.evaluateAndFireProximityAlertIfNeeded(
             estimatedMinutesUntilRelevantStop: estimatedMinutesUntilPassengerRelevantStop,
             passengerHasAlreadyBeenPickedUp: passengerHasAlreadyBeenPickedUp,
-            passengerPickupStopName: passengerPickupStopName,
-            passengerDropOffStopName: passengerDropOffStopName,
+            passengerPickupStopName: relevantPickupLabel,
+            passengerDropOffStopName: relevantDropOffLabel,
             proximityThresholdInMinutes: proximityAlertThresholdInMinutes
         )
     }
@@ -183,6 +188,7 @@ final class TripTrackingViewModel: ObservableObject {
 
         var orderedStopNames = [startStopName] + intermediateStopNames + [endStopName]
 
+        // Evening trips run the route in reverse — passengers board at what was the morning drop-off
         if sessionLabel == "Evening" {
             orderedStopNames.reverse()
         }
@@ -195,6 +201,8 @@ final class TripTrackingViewModel: ObservableObject {
 
         let allRouteStops = buildOrderedStopNamesFromRoute(routeData: routeData, sessionLabel: sessionLabel)
 
+        // For evening sessions the ordered list is already reversed, so passengerPickupStopName
+        // refers to the stop the passenger boards at in the evening direction.
         let indexOfPassengerPickupStop = allRouteStops.firstIndex(of: passengerPickupStopName) ?? 1
         let numberOfStopsUntilPickup = max(indexOfPassengerPickupStop, 0)
 

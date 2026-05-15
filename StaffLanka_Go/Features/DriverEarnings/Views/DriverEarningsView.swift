@@ -10,12 +10,14 @@ import SwiftUI
 struct DriverEarningsView: View {
 
     @StateObject private var earningsViewModel = DriverEarningsViewModel()
+    // Local Date binding for the DatePicker — only month and year matter
+    @State private var selectedPickerDate: Date = Date()
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
                 totalEarningsSummaryCard.padding(.top, 8)
-                monthChipFilterBar
+                monthYearPickerSection
                 if earningsViewModel.numberOfUnpaidPassengers > 0 {
                     unpaidPassengersAlertBanner
                 }
@@ -27,7 +29,11 @@ struct DriverEarningsView: View {
         .background(Color.appBackground)
         .navigationTitle("Earnings")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { earningsViewModel.startListening() }
+        .onAppear {
+            earningsViewModel.startListening()
+            // Sync the picker to the currently selected month on appear
+            selectedPickerDate = earningsViewModel.dateFromMonthYearString(earningsViewModel.selectedMonthYear) ?? Date()
+        }
         .overlay {
             if earningsViewModel.isLoading {
                 VStack(spacing: 12) {
@@ -40,7 +46,6 @@ struct DriverEarningsView: View {
         }
     }
 
-    // Top summary card showing selected month totals
     private var totalEarningsSummaryCard: some View {
         ZStack(alignment: .bottomLeading) {
             LinearGradient.brand.clipShape(RoundedRectangle(cornerRadius: 20))
@@ -81,50 +86,59 @@ struct DriverEarningsView: View {
         }
     }
 
-    // Horizontally scrollable month chip bar — replaces the Picker dropdown
-    // Shows the last 12 months as tappable chips with the current month highlighted
-    private var monthChipFilterBar: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    // DatePicker allowing the user to select month and year only
+    // Data is scoped to the selected month — nothing is shown cumulatively across months
+    private var monthYearPickerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Filter by Month")
-                .font(.system(size: 12, weight: .semibold)).foregroundColor(.textTertiary).textCase(.uppercase).tracking(0.5)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.textTertiary)
+                .textCase(.uppercase)
+                .tracking(0.5)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(earningsViewModel.availableMonthChips) { chip in
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                earningsViewModel.selectMonth(chip.monthYear)
-                            }
-                        } label: {
-                            VStack(spacing: 2) {
-                                Text(chip.displayLabel)
-                                    .font(.system(size: 13, weight: chip.monthYear == earningsViewModel.selectedMonthYear ? .bold : .medium))
-                                    .foregroundColor(chip.monthYear == earningsViewModel.selectedMonthYear ? .white : .textPrimary)
-                                if chip.isCurrentMonth {
-                                    Circle().fill(chip.monthYear == earningsViewModel.selectedMonthYear ? Color.white : Color.brandAccent).frame(width: 4, height: 4)
-                                }
-                            }
-                            .padding(.horizontal, 16).padding(.vertical, 10)
-                            .background(chip.monthYear == earningsViewModel.selectedMonthYear ? Color.brandAccent : Color.cardBackground)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(
-                                chip.isCurrentMonth && chip.monthYear != earningsViewModel.selectedMonthYear
-                                    ? Color.brandAccent.opacity(0.5) : Color.divider,
-                                lineWidth: 1
-                            ))
-                        }
-                        .buttonStyle(.plain)
-                        .animation(.easeInOut(duration: 0.15), value: earningsViewModel.selectedMonthYear)
+            HStack(spacing: 12) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 16))
+                    .foregroundStyle(Color.brandAccent)
+
+                DatePicker(
+                    "",
+                    selection: $selectedPickerDate,
+                    in: ...Date(),
+                    displayedComponents: [.date]
+                )
+                .datePickerStyle(.compact)
+                .labelsHidden()
+                .tint(Color.brandAccent)
+                .onChange(of: selectedPickerDate) { _, newDate in
+                    let newMonthYear = earningsViewModel.monthYearStringFromDate(newDate)
+                    if newMonthYear != earningsViewModel.selectedMonthYear {
+                        earningsViewModel.selectMonth(newMonthYear)
                     }
                 }
-                .padding(.horizontal, 2).padding(.vertical, 2)
+
+                Spacer()
+
+                // Shows which month is currently displayed
+                Text(currentMonthDisplayLabel)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.brandAccent)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.brandAccent.opacity(0.10))
+                    .clipShape(Capsule())
             }
+            .padding(14)
+            .background(Color.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.divider, lineWidth: 1))
         }
     }
 
     private var currentMonthDisplayLabel: String {
-        earningsViewModel.availableMonthChips.first { $0.monthYear == earningsViewModel.selectedMonthYear }?.displayLabel
-            ?? earningsViewModel.selectedMonthYear
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: selectedPickerDate)
     }
 
     private var thinVerticalDivider: some View {
@@ -196,7 +210,6 @@ struct DriverEarningsView: View {
         }
     }
 
-    // Full-detail passenger row: name, phone, pickup → drop-off, session, fee, paid/pending badge
     private func passengerPaymentRow(record: DriverEarningsViewModel.PassengerPaymentRecord) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 14) {
@@ -215,7 +228,6 @@ struct DriverEarningsView: View {
                 }
             }
 
-            // Route detail
             VStack(spacing: 4) {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.up.circle.fill").font(.system(size: 11)).foregroundStyle(Color.statusActive)
@@ -232,7 +244,6 @@ struct DriverEarningsView: View {
             }
             .padding(.leading, 58)
 
-            // Session badge
             sessionTypeLabel(serviceType: record.routeServiceType).padding(.leading, 58)
         }
         .padding(14)
