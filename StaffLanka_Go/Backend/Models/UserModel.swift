@@ -9,6 +9,7 @@
 import Foundation
 import FirebaseFirestore
 
+//collection name in firebase is "users"
 struct UserModel: Codable, Identifiable {
     @DocumentID var id: String?
     var phoneNumber: String

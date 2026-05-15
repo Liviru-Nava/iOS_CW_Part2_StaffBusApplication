@@ -70,10 +70,10 @@ struct DriverTripDetailView: View {
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(tripRecord.sessionType == "Morning" ? "Morning Trip" : "Evening Trip")
-                            .font(.system(size: 18, weight: .bold))
+                            .font(.appTitle3)
                             .foregroundStyle(Color.white)
                         Text(tripRecord.tripDate.formatted(date: .long, time: .omitted))
-                            .font(.system(size: 13))
+                            .font(.appFootnote)
                             .foregroundStyle(Color.white.opacity(0.70))
                     }
 
@@ -122,12 +122,14 @@ struct DriverTripDetailView: View {
     private func headerTimeCell(labelText: String, timeText: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(labelText)
-                .font(.system(size: 11))
+                .font(.appCaption2)
                 .foregroundStyle(Color.white.opacity(0.60))
             Text(timeText)
-                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .font(.appCalloutBold)
                 .foregroundStyle(Color.white)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(labelText): \(timeText)")
     }
 
     private var displayModeToggle: some View {
@@ -162,7 +164,7 @@ struct DriverTripDetailView: View {
                 Image(systemName: iconName)
                     .font(.system(size: 13, weight: .semibold))
                 Text(labelText)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.appCalloutSemibold)
             }
             .foregroundStyle(isActiveMode ? Color.brandAccent : Color.textSecondary)
             .frame(maxWidth: .infinity)
@@ -171,6 +173,8 @@ struct DriverTripDetailView: View {
             .clipShape(RoundedRectangle(cornerRadius: 11))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(labelText)
+        .accessibilityAddTraits(isActiveMode ? [.isSelected] : [])
     }
 
     private var performanceSummarySection: some View {
@@ -216,12 +220,13 @@ struct DriverTripDetailView: View {
                     .font(.system(size: 15))
                     .foregroundStyle(iconColor)
             }
+            .accessibilityHidden(true)
             VStack(spacing: 1) {
                 Text(statValue)
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .font(.appSubheadline)
                     .foregroundStyle(Color.textPrimary)
                 Text(statLabel)
-                    .font(.system(size: 10))
+                    .font(.appCaption2)
                     .foregroundStyle(Color.textSecondary)
             }
         }
@@ -229,6 +234,8 @@ struct DriverTripDetailView: View {
         .padding(.vertical, 14)
         .background(Color.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(statLabel): \(statValue)")
     }
 
     private var stopsTimelineSection: some View {
@@ -283,13 +290,15 @@ struct DriverTripDetailView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(stopRecord.stopName)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.appCalloutSemibold)
                         .foregroundStyle(isCompleted ? Color.textPrimary : Color.textTertiary)
                     Text(stopRecord.timeReached)
-                        .font(.system(size: 12))
+                        .font(.appCaption)
                         .foregroundStyle(Color.textSecondary)
                 }
                 .padding(.vertical, 16)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(stopRecord.stopName), \(isCompleted ? "Completed" : "Skipped"), reached at \(stopRecord.timeReached)")
 
                 Spacer()
 
@@ -371,7 +380,7 @@ struct DriverTripDetailView: View {
 
         for stopRecord in tripRecord.stopsTimeline {
             let geocoder = CLGeocoder()
-            if let placemark = try? await geocoder.geocodeAddressString(stopRecord.stopName + ", Sri Lanka"),
+            if let placemark = try? await geocoder.geocodeAddressString(stopRecord.stopName + ", San Fransisco, CA"),
                let location = placemark.first?.location {
                 geocodedCoordinates.append(location.coordinate)
             }
@@ -475,7 +484,7 @@ struct TripHistoryRouteMapView: View {
         for stopRecord in stopsTimeline {
             guard coordinateMap[stopRecord.stopName] == nil else { continue }
             let geocoder = CLGeocoder()
-            if let placemark = try? await geocoder.geocodeAddressString(stopRecord.stopName + ", Sri Lanka"),
+            if let placemark = try? await geocoder.geocodeAddressString(stopRecord.stopName + ", San Fransisco, CA"),
                let location = placemark.first?.location {
                 coordinateMap[stopRecord.stopName] = location.coordinate
             }
@@ -575,14 +584,15 @@ struct PaginatedTripPassengerDetailView: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(record.passengerFullName)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.appCalloutSemibold)
                     .foregroundStyle(Color.textPrimary)
                 HStack(spacing: 4) {
                     Image(systemName: "mappin.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(Color.brandAccent)
+                        .accessibilityHidden(true)
                     Text(record.boardingStopName)
-                        .font(.system(size: 12))
+                        .font(.appCaption)
                         .foregroundStyle(Color.textSecondary)
                 }
             }

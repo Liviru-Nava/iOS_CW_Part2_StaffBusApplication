@@ -61,13 +61,15 @@ struct DriverTripHistoryView: View {
     private func bannerStatCell(statValue: String, statLabel: String) -> some View {
         VStack(spacing: 4) {
             Text(statValue)
-                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .font(.appLargeTitle)
                 .foregroundStyle(Color.white)
             Text(statLabel)
-                .font(.system(size: 12))
+                .font(.appCaption)
                 .foregroundStyle(Color.white.opacity(0.65))
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(statLabel): \(statValue)")
     }
 
     private var bannerVerticalDivider: some View {
@@ -85,7 +87,7 @@ struct DriverTripHistoryView: View {
                         tripHistoryViewModel.selectedDateRangeFilter = filterOption
                     } label: {
                         Text(filterOption.rawValue)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.appFootnoteMedium)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 7)
                             .background(isSelectedFilter ? Color.brandAccent.opacity(0.14) : Color.cardBackground)
@@ -100,6 +102,8 @@ struct DriverTripHistoryView: View {
                     }
                     .buttonStyle(.plain)
                     .animation(.easeInOut(duration: 0.15), value: tripHistoryViewModel.selectedDateRangeFilter)
+                    .accessibilityLabel(filterOption.rawValue)
+                    .accessibilityAddTraits(isSelectedFilter ? [.isSelected] : [])
                 }
             }
             .padding(.horizontal, 16)
@@ -123,11 +127,12 @@ struct DriverTripHistoryView: View {
                 ForEach(tripHistoryViewModel.tripRecordsGroupedByDate, id: \.0) { groupLabel, tripsInGroup in
                     VStack(alignment: .leading, spacing: 10) {
                         Text(groupLabel)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.appCaption2Semibold)
                             .foregroundStyle(Color.textTertiary)
                             .textCase(.uppercase)
                             .tracking(0.5)
                             .padding(.horizontal, 16)
+                            .accessibilityAddTraits(.isHeader)
 
                         ForEach(tripsInGroup) { tripRecord in
                             NavigationLink(destination: DriverTripDetailView(tripRecord: tripRecord)) {
@@ -153,10 +158,10 @@ struct DriverTripHistoryView: View {
                     .foregroundStyle(Color.brandAccent)
             }
             Text("No Trips Found")
-                .font(.system(size: 20, weight: .bold))
+                .font(.appTitle)
                 .foregroundStyle(Color.textPrimary)
             Text("No trips recorded for the selected date range.")
-                .font(.system(size: 14))
+                .font(.appBody)
                 .foregroundStyle(Color.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
@@ -198,12 +203,12 @@ struct DriverTripHistoryCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(tripRecord.sessionType == "Morning" ? "Morning Trip" : "Evening Trip")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.appCalloutSemibold)
                             .foregroundStyle(Color.textPrimary)
                         completionStatusPill
                     }
                     Text(tripRecord.tripDate.formatted(date: .long, time: .omitted))
-                        .font(.system(size: 12))
+                        .font(.appCaption)
                         .foregroundStyle(Color.textTertiary)
                 }
 
@@ -246,12 +251,13 @@ struct DriverTripHistoryCard: View {
 
     private var completionStatusPill: some View {
         Text(tripRecord.completionStatus.rawValue)
-            .font(.system(size: 10, weight: .semibold))
+            .font(.appCaption2Semibold)
             .foregroundStyle(completionStatusColor)
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(completionStatusColor.opacity(0.12))
             .clipShape(Capsule())
+            .accessibilityHidden(true)
     }
 
     private func cardDetailItem(iconName: String, labelText: String) -> some View {

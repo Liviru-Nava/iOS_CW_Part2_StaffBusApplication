@@ -52,8 +52,8 @@ struct DriverEarningsView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Total Earnings").font(.system(size: 11, weight: .medium)).foregroundStyle(Color.white.opacity(0.55))
-                        Text(currentMonthDisplayLabel).font(.system(size: 16, weight: .bold)).foregroundStyle(Color.white)
+                        Text("Total Earnings").font(.appCaption2).foregroundStyle(Color.white.opacity(0.55))
+                        Text(currentMonthDisplayLabel).font(.appCalloutSemibold).foregroundStyle(Color.white)
                     }
                     Spacer()
                     ZStack {
@@ -63,9 +63,9 @@ struct DriverEarningsView: View {
                 }
 
                 HStack(alignment: .lastTextBaseline, spacing: 6) {
-                    Text("Rs.").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.white.opacity(0.70))
+                    Text("Rs.").font(.appCalloutSemibold).foregroundStyle(Color.white.opacity(0.70))
                     Text(earningsViewModel.totalEarningsForSelectedMonth.formattedWithSeparator)
-                        .font(.system(size: 28, weight: .bold, design: .rounded)).foregroundStyle(Color.white)
+                        .font(.appLargeTitle).foregroundStyle(Color.white)
                 }
 
                 Rectangle().fill(Color.white.opacity(0.14)).frame(height: 1)
@@ -87,14 +87,15 @@ struct DriverEarningsView: View {
     }
 
     // DatePicker allowing the user to select month and year only
-    // Data is scoped to the selected month — nothing is shown cumulatively across months
+    // Data is scoped to the selected month and doesnt show other month data
     private var monthYearPickerSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Filter by Month")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.appCaptionSemibold)
                 .foregroundColor(.textTertiary)
                 .textCase(.uppercase)
                 .tracking(0.5)
+                .accessibilityAddTraits(.isHeader)
 
             HStack(spacing: 12) {
                 Image(systemName: "calendar")
@@ -121,12 +122,13 @@ struct DriverEarningsView: View {
 
                 // Shows which month is currently displayed
                 Text(currentMonthDisplayLabel)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.appFootnoteSemibold)
                     .foregroundStyle(Color.brandAccent)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(Color.brandAccent.opacity(0.10))
                     .clipShape(Capsule())
+                    .accessibilityLabel("Showing earnings for \(currentMonthDisplayLabel)")
             }
             .padding(14)
             .background(Color.cardBackground)
@@ -147,19 +149,24 @@ struct DriverEarningsView: View {
 
     private func compactStatCell(labelText: String, valueText: String, valueColor: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(labelText).font(.system(size: 10)).foregroundStyle(Color.white.opacity(0.55))
-            Text(valueText).font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(valueColor).lineLimit(1).minimumScaleFactor(0.75)
+            Text(labelText).font(.appCaption2).foregroundStyle(Color.white.opacity(0.55))
+            Text(valueText).font(.appCaptionSemibold).foregroundStyle(valueColor).lineLimit(1).minimumScaleFactor(0.75)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(labelText): \(valueText)")
     }
 
     private func compactPassengerCell(labelText: String, count: Int, countColor: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(labelText).font(.system(size: 10)).foregroundStyle(Color.white.opacity(0.55))
+            Text(labelText).font(.appCaption2).foregroundStyle(Color.white.opacity(0.55))
             HStack(spacing: 3) {
                 Image(systemName: "person.fill").font(.system(size: 9)).foregroundStyle(countColor.opacity(0.75))
-                Text("\(count)").font(.system(size: 13, weight: .bold, design: .rounded)).foregroundStyle(countColor)
+                    .accessibilityHidden(true)
+                Text("\(count)").font(.appFootnoteSemibold).foregroundStyle(countColor)
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(labelText): \(count)")
     }
 
     private var unpaidPassengersAlertBanner: some View {
@@ -170,8 +177,8 @@ struct DriverEarningsView: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(earningsViewModel.numberOfUnpaidPassengers) passenger\(earningsViewModel.numberOfUnpaidPassengers == 1 ? "" : "s") have not paid yet")
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.textPrimary)
-                Text("See the list below").font(.system(size: 12)).foregroundStyle(Color.textSecondary)
+                    .font(.appCalloutSemibold).foregroundStyle(Color.textPrimary)
+                Text("See the list below").font(.appCaption).foregroundStyle(Color.textSecondary)
             }
             Spacer()
         }
@@ -218,8 +225,8 @@ struct DriverEarningsView: View {
                     Text(String(record.passengerFullName.prefix(1))).font(.system(size: 17, weight: .bold)).foregroundStyle(Color.brandAccent)
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(record.passengerFullName).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.textPrimary)
-                    Text(record.passengerPhoneNumber).font(.system(size: 12)).foregroundStyle(Color.textSecondary)
+                    Text(record.passengerFullName).font(.appCalloutSemibold).foregroundStyle(Color.textPrimary)
+                    Text(record.passengerPhoneNumber).font(.appCaption).foregroundStyle(Color.textSecondary)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {

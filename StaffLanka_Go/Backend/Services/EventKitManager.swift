@@ -13,106 +13,116 @@ final class EventKitManager {
     static let shared = EventKitManager()
 
     private let eventKitStore = EKEventStore()
+    private let storedEventIdentifiersKey = "stafflanka_eventkit_stored_identifiers"
 
-    // Key used to persist created event identifiers in UserDefaults
-    private let userDefaultsStoredEventIdentifiersKey = "stafflanka_eventkit_stored_identifiers"
+    // UserDefaults keys for the end-of-month expiry date stored per route
+    // Format: "stafflanka_eventkit_expiry_<routeId>"
+    private func expiryDateKey(routeId: String) -> String {
+        "stafflanka_eventkit_expiry_\(routeId)"
+    }
 
     private init() {}
 
-    // Requests write-only calendar access on iOS 17+, full access on earlier versions
+    // Requests write-only calendar access on full access on earlier versions
     func requestCalendarWriteAccessIfNeeded() async -> Bool {
-        print("[EventKitManager] requestCalendarWriteAccessIfNeeded called")
-        
         if #available(iOS 17.0, *) {
             do {
-                let accessWasGranted = try await eventKitStore.requestWriteOnlyAccessToEvents()
-                return accessWasGranted
+                return try await eventKitStore.requestWriteOnlyAccessToEvents()
             } catch {
                 print("[EventKitManager] Write-only access request failed: \(error.localizedDescription)")
                 return false
             }
         } else {
-            return await withCheckedContinuation { checkedContinuation in
-                eventKitStore.requestAccess(to: .event) { accessGranted, requestError in
-                    if let requestError {
-                        print("[EventKitManager] Legacy access request failed: \(requestError.localizedDescription)")
-                    }
-                    checkedContinuation.resume(returning: accessGranted)
+            return await withCheckedContinuation { continuation in
+                eventKitStore.requestAccess(to: .event) { granted, error in
+                    if let error { print("[EventKitManager] Legacy access request failed: \(error.localizedDescription)") }
+                    continuation.resume(returning: granted)
                 }
             }
         }
     }
 
-    // Creates two recurring calendar events (morning + evening) for an approved passenger.
-    // Should be called once a join request is submitted successfully.
+    // Schedules calendar events for a passenger after their request has been accepted by the driver.
+    // sessionLabel must be "Morning", "Evening", or "Both".
+    // Events recur weekly until the last day of the current calendar month.
     // Returns the count of events successfully saved.
     @discardableResult
-    func schedulePassengerTripReminders(
+    func schedulePassengerEventsOnAcceptance(
         routeId: String,
         routeDisplayName: String,
         passengerPickupStopName: String,
+        sessionLabel: String,
         morningDepartureTime: Date,
         eveningDepartureTime: Date,
         routeActiveDays: [String]
     ) async -> Int {
-
-        let calendarAccessGranted = await requestCalendarWriteAccessIfNeeded()
-        guard calendarAccessGranted else {
-            print("[EventKitManager] Calendar access denied — passenger trip reminders not scheduled")
+        guard await requestCalendarWriteAccessIfNeeded() else {
+            print("[EventKitManager] Calendar access denied — passenger events not scheduled")
             return 0
         }
 
-        let recurrenceWeekdayList = routeActiveDays.compactMap { convertDayStringToEKWeekday($0) }
+        let recurrenceWeekdays = routeActiveDays
+            .compactMap { convertDayStringToEKWeekday($0) }
             .map { EKRecurrenceDayOfWeek($0) }
 
-        guard !recurrenceWeekdayList.isEmpty else {
-            print("[EventKitManager] No valid active days found — aborting passenger event creation")
+        guard !recurrenceWeekdays.isEmpty else {
+            print("[EventKitManager] No valid active days — aborting passenger event creation")
             return 0
         }
 
-        var totalEventsSaved = 0
+        let monthEndDate = endOfCurrentMonth()
+        var savedCount = 0
 
-        // Morning session event
-        let morningEventIdentifier = createAndSavePassengerCalendarEvent(
-            eventTitle: "StaffLanka Go — \(routeDisplayName) (Morning)",
-            pickupStopLocation: passengerPickupStopName,
-            eventStartDate: morningDepartureTime,
-            estimatedTripDurationMinutes: 60,
-            alarmOffsetMinutesBeforeStart: -30,
-            recurrenceWeekdays: recurrenceWeekdayList,
-            eventNotes: "Morning pickup at \(passengerPickupStopName). Be ready at least 5 minutes before departure."
-        )
-        if morningEventIdentifier != nil { totalEventsSaved += 1 }
-
-        // Evening session event
-        let eveningEventIdentifier = createAndSavePassengerCalendarEvent(
-            eventTitle: "StaffLanka Go — \(routeDisplayName) (Evening)",
-            pickupStopLocation: passengerPickupStopName,
-            eventStartDate: eveningDepartureTime,
-            estimatedTripDurationMinutes: 60,
-            alarmOffsetMinutesBeforeStart: -30,
-            recurrenceWeekdays: recurrenceWeekdayList,
-            eventNotes: "Evening pickup at \(passengerPickupStopName). Be ready at least 5 minutes before departure."
-        )
-        if eveningEventIdentifier != nil { totalEventsSaved += 1 }
-
-        // Persist both identifiers so they can be removed later if needed
-        if let morningIdentifier = morningEventIdentifier {
-            UserDefaults.standard.set([morningIdentifier], forKey: "stafflanka_eventkit_\(routeId)_morning")
-        }
-        if let eveningIdentifier = eveningEventIdentifier {
-            UserDefaults.standard.set([eveningIdentifier], forKey: "stafflanka_eventkit_\(routeId)_evening")
+        if sessionLabel == "Morning" || sessionLabel == "Both" {
+            let identifier = createAndSaveEvent(
+                title: "StaffLanka Go — \(routeDisplayName) (Morning)",
+                location: passengerPickupStopName,
+                startDate: morningDepartureTime,
+                endDate: Calendar.current.date(byAdding: .minute, value: 60, to: morningDepartureTime) ?? morningDepartureTime,
+                alarmOffset: -30 * 60,
+                recurrenceWeekdays: recurrenceWeekdays,
+                recurrenceEndDate: monthEndDate,
+                notes: "Morning pickup at \(passengerPickupStopName). Be ready at least 5 minutes before departure."
+            )
+            if let identifier {
+                UserDefaults.standard.set([identifier], forKey: "stafflanka_eventkit_\(routeId)_morning")
+                savedCount += 1
+            }
         }
 
-        print("[EventKitManager] Passenger trip reminders saved: \(totalEventsSaved) event(s)")
-        return totalEventsSaved
+        if sessionLabel == "Evening" || sessionLabel == "Both" {
+            let identifier = createAndSaveEvent(
+                title: "StaffLanka Go — \(routeDisplayName) (Evening)",
+                location: passengerPickupStopName,
+                startDate: eveningDepartureTime,
+                endDate: Calendar.current.date(byAdding: .minute, value: 60, to: eveningDepartureTime) ?? eveningDepartureTime,
+                alarmOffset: -30 * 60,
+                recurrenceWeekdays: recurrenceWeekdays,
+                recurrenceEndDate: monthEndDate,
+                notes: "Evening pickup at \(passengerPickupStopName). Be ready at least 5 minutes before departure."
+            )
+            if let identifier {
+                UserDefaults.standard.set([identifier], forKey: "stafflanka_eventkit_\(routeId)_evening")
+                savedCount += 1
+            }
+        }
+
+        // Store the expiry date so the monthly refresh logic can detect when to reschedule
+        UserDefaults.standard.set(monthEndDate, forKey: expiryDateKey(routeId: routeId))
+        appendIdentifiersToUserDefaults(newIdentifiers: [
+            UserDefaults.standard.stringArray(forKey: "stafflanka_eventkit_\(routeId)_morning") ?? [],
+            UserDefaults.standard.stringArray(forKey: "stafflanka_eventkit_\(routeId)_evening") ?? []
+        ].flatMap { $0 })
+
+        print("[EventKitManager] Passenger events saved: \(savedCount) for session '\(sessionLabel)'")
+        return savedCount
     }
 
-    // Creates two recurring calendar events (morning + evening) for a newly onboarded driver.
-    // Should be called at the end of submitOnboarding() in DriverRouteScheduleViewModel.
-    // Returns the count of events successfully saved.
+    // Schedules calendar events for the driver once their first passenger has been accepted.
+    // Events recur weekly until the last day of the current calendar month.
     @discardableResult
-    func scheduleDriverOperatingDayReminders(
+    func scheduleDriverEventsOnFirstPassengerAccepted(
+        routeId: String,
         routeStartLocationName: String,
         routeEndLocationName: String,
         morningDepartureTime: Date,
@@ -121,96 +131,160 @@ final class EventKitManager {
         eveningEstimatedArrivalTime: Date,
         routeActiveDays: [String]
     ) async -> Int {
-
-        let calendarAccessGranted = await requestCalendarWriteAccessIfNeeded()
-        guard calendarAccessGranted else {
-            print("[EventKitManager] Calendar access denied — driver operating reminders not scheduled")
+        guard await requestCalendarWriteAccessIfNeeded() else {
+            print("[EventKitManager] Calendar access denied — driver events not scheduled")
             return 0
         }
 
-        let recurrenceWeekdayList = routeActiveDays.compactMap { convertDayStringToEKWeekday($0) }
+        let recurrenceWeekdays = routeActiveDays
+            .compactMap { convertDayStringToEKWeekday($0) }
             .map { EKRecurrenceDayOfWeek($0) }
 
-        guard !recurrenceWeekdayList.isEmpty else {
-            print("[EventKitManager] No valid active days found — aborting driver event creation")
+        guard !recurrenceWeekdays.isEmpty else {
+            print("[EventKitManager] No valid active days — aborting driver event creation")
             return 0
         }
 
-        let routeDisplayLabel = "\(routeStartLocationName) → \(routeEndLocationName)"
-        var totalEventsSaved = 0
+        let routeLabel = "\(routeStartLocationName) → \(routeEndLocationName)"
+        let monthEndDate = endOfCurrentMonth()
+        var savedCount = 0
 
-        // Morning operating day event
-        let morningEventIdentifier = createAndSaveDriverCalendarEvent(
-            eventTitle: "StaffLanka Go Route — \(routeDisplayLabel) (Morning)",
-            eventStartDate: morningDepartureTime,
-            eventEndDate: morningEstimatedArrivalTime,
-            alarmOffsetMinutesBeforeStart: -60,
-            recurrenceWeekdays: recurrenceWeekdayList,
-            eventNotes: "Morning operating day. Depart from \(routeStartLocationName) on schedule."
+        let morningIdentifier = createAndSaveEvent(
+            title: "StaffLanka Go Route — \(routeLabel) (Morning)",
+            location: routeStartLocationName,
+            startDate: morningDepartureTime,
+            endDate: morningEstimatedArrivalTime,
+            alarmOffset: -60 * 60,
+            recurrenceWeekdays: recurrenceWeekdays,
+            recurrenceEndDate: monthEndDate,
+            notes: "Morning operating day. Depart from \(routeStartLocationName) on schedule."
         )
-        if morningEventIdentifier != nil { totalEventsSaved += 1 }
+        if morningIdentifier != nil { savedCount += 1 }
 
-        // Evening operating day event
-        let eveningEventIdentifier = createAndSaveDriverCalendarEvent(
-            eventTitle: "StaffLanka Go Route — \(routeDisplayLabel) (Evening)",
-            eventStartDate: eveningDepartureTime,
-            eventEndDate: eveningEstimatedArrivalTime,
-            alarmOffsetMinutesBeforeStart: -60,
-            recurrenceWeekdays: recurrenceWeekdayList,
-            eventNotes: "Evening operating day. Return trip from \(routeEndLocationName) on schedule."
+        let eveningIdentifier = createAndSaveEvent(
+            title: "StaffLanka Go Route — \(routeLabel) (Evening)",
+            location: routeEndLocationName,
+            startDate: eveningDepartureTime,
+            endDate: eveningEstimatedArrivalTime,
+            alarmOffset: -60 * 60,
+            recurrenceWeekdays: recurrenceWeekdays,
+            recurrenceEndDate: monthEndDate,
+            notes: "Evening operating day. Return trip from \(routeEndLocationName) on schedule."
         )
-        if eveningEventIdentifier != nil { totalEventsSaved += 1 }
+        if eveningIdentifier != nil { savedCount += 1 }
 
-        let newIdentifiers = [morningEventIdentifier, eveningEventIdentifier].compactMap { $0 }
-        appendIdentifiersToUserDefaults(newEventIdentifiers: newIdentifiers)
+        let newIdentifiers = [morningIdentifier, eveningIdentifier].compactMap { $0 }
+        appendIdentifiersToUserDefaults(newIdentifiers: newIdentifiers)
+        UserDefaults.standard.set(monthEndDate, forKey: expiryDateKey(routeId: routeId))
 
-        print("[EventKitManager] Driver operating day reminders saved: \(totalEventsSaved) event(s)")
-        return totalEventsSaved
+        print("[EventKitManager] Driver events saved: \(savedCount)")
+        return savedCount
     }
 
-    // Removes all StaffLanka Go calendar events that were previously saved by this app.
-    // Used when the user logs out or deletes their account.
+    // Called at app launch. If the stored recurrence end date for a route has passed,
+    // the events for that month have ended and new ones need to be created for the current month.
+    // The caller provides all the parameters needed to recreate the events.
+    func rescheduleEventsIfMonthExpired(
+        routeId: String,
+        routeDisplayName: String,
+        passengerPickupStopName: String,
+        sessionLabel: String,
+        morningDepartureTime: Date,
+        eveningDepartureTime: Date,
+        routeActiveDays: [String]
+    ) async {
+        let expiryKey = expiryDateKey(routeId: routeId)
+        guard let storedExpiry = UserDefaults.standard.object(forKey: expiryKey) as? Date else {
+            // No expiry stored means no events were ever scheduled — nothing to refresh
+            return
+        }
+
+        // If the stored expiry is still in the future, events are still active
+        guard storedExpiry < Date() else { return }
+
+        print("[EventKitManager] Events for route \(routeId) expired on \(storedExpiry) — rescheduling for current month")
+
+        // Remove any leftover event identifiers from the previous month
+        removeCalendarEventsForRoute(routeId: routeId, sessionLabel: sessionLabel)
+
+        // Create fresh events for the current month
+        await schedulePassengerEventsOnAcceptance(
+            routeId: routeId,
+            routeDisplayName: routeDisplayName,
+            passengerPickupStopName: passengerPickupStopName,
+            sessionLabel: sessionLabel,
+            morningDepartureTime: morningDepartureTime,
+            eveningDepartureTime: eveningDepartureTime,
+            routeActiveDays: routeActiveDays
+        )
+    }
+
+    // Removes all StaffLanka Go calendar events saved by this app.
     func removeAllStoredStaffLankaCalendarEvents() {
         let storedIdentifiers = loadIdentifiersFromUserDefaults()
         var removalCount = 0
-        for savedEventIdentifier in storedIdentifiers {
-            if let existingCalendarEvent = eventKitStore.event(withIdentifier: savedEventIdentifier) {
+        for identifier in storedIdentifiers {
+            if let event = eventKitStore.event(withIdentifier: identifier) {
                 do {
-                    try eventKitStore.remove(existingCalendarEvent, span: .futureEvents)
+                    try eventKitStore.remove(event, span: .futureEvents)
                     removalCount += 1
                 } catch {
-                    print("[EventKitManager] Failed to remove event \(savedEventIdentifier): \(error.localizedDescription)")
+                    print("[EventKitManager] Failed to remove event \(identifier): \(error.localizedDescription)")
                 }
             }
         }
-        UserDefaults.standard.removeObject(forKey: userDefaultsStoredEventIdentifiersKey)
+        UserDefaults.standard.removeObject(forKey: storedEventIdentifiersKey)
         print("[EventKitManager] Removed \(removalCount) calendar event(s)")
     }
 
-    // Internal helper: builds and saves a passenger calendar event. Returns the event identifier on success.
-    private func createAndSavePassengerCalendarEvent(
-        eventTitle: String,
-        pickupStopLocation: String,
-        eventStartDate: Date,
-        estimatedTripDurationMinutes: Int,
-        alarmOffsetMinutesBeforeStart: Int,
+    func removeCalendarEventsForRoute(routeId: String, sessionLabel: String) {
+        let morningKey = "stafflanka_eventkit_\(routeId)_morning"
+        let eveningKey = "stafflanka_eventkit_\(routeId)_evening"
+
+        switch sessionLabel {
+        case "Morning":
+            removeEventsForStorageKey(morningKey)
+        case "Evening":
+            removeEventsForStorageKey(eveningKey)
+        default:
+            removeEventsForStorageKey(morningKey)
+            removeEventsForStorageKey(eveningKey)
+        }
+    }
+
+    // Returns the last second of the last day of the current calendar month
+    private func endOfCurrentMonth() -> Date {
+        let calendar = Calendar.current
+        let now = Date()
+        guard let startOfNextMonth = calendar.date(
+            byAdding: .month, value: 1,
+            to: calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
+        ) else { return now }
+        // Subtract one second to land at 23:59:59 of the last day of the current month
+        return startOfNextMonth.addingTimeInterval(-1)
+    }
+
+    // Unified internal helper that creates and saves a single EKEvent with a weekly recurrence
+    // ending on the given recurrenceEndDate. Returns the event identifier on success.
+    private func createAndSaveEvent(
+        title: String,
+        location: String?,
+        startDate: Date,
+        endDate: Date,
+        alarmOffset: TimeInterval,
         recurrenceWeekdays: [EKRecurrenceDayOfWeek],
-        eventNotes: String
+        recurrenceEndDate: Date,
+        notes: String
     ) -> String? {
+        let event = EKEvent(eventStore: eventKitStore)
+        event.title     = title
+        event.location  = location
+        event.notes     = notes
+        event.startDate = startDate
+        event.endDate   = endDate
+        event.calendar  = eventKitStore.defaultCalendarForNewEvents
 
-        let calendarEvent = EKEvent(eventStore: eventKitStore)
-        calendarEvent.title = eventTitle
-        calendarEvent.location = pickupStopLocation
-        calendarEvent.notes = eventNotes
-        calendarEvent.startDate = eventStartDate
-        calendarEvent.endDate = Calendar.current.date(
-            byAdding: .minute,
-            value: estimatedTripDurationMinutes,
-            to: eventStartDate
-        ) ?? eventStartDate
-        calendarEvent.calendar = eventKitStore.defaultCalendarForNewEvents
-
-        let weeklyRecurrenceRule = EKRecurrenceRule(
+        let recurrenceRule = EKRecurrenceRule(
             recurrenceWith: .weekly,
             interval: 1,
             daysOfTheWeek: recurrenceWeekdays,
@@ -219,67 +293,22 @@ final class EventKitManager {
             weeksOfTheYear: nil,
             daysOfTheYear: nil,
             setPositions: nil,
-            end: nil
+            end: EKRecurrenceEnd(end: recurrenceEndDate)
         )
-        calendarEvent.recurrenceRules = [weeklyRecurrenceRule]
-
-        let preEventAlarm = EKAlarm(relativeOffset: TimeInterval(alarmOffsetMinutesBeforeStart * 60))
-        calendarEvent.addAlarm(preEventAlarm)
+        event.recurrenceRules = [recurrenceRule]
+        event.addAlarm(EKAlarm(relativeOffset: alarmOffset))
 
         do {
-            try eventKitStore.save(calendarEvent, span: .futureEvents)
-            return calendarEvent.eventIdentifier
+            try eventKitStore.save(event, span: .futureEvents)
+            return event.eventIdentifier
         } catch {
-            print("[EventKitManager] Failed to save passenger calendar event '\(eventTitle)': \(error.localizedDescription)")
+            print("[EventKitManager] Failed to save event '\(title)': \(error.localizedDescription)")
             return nil
         }
     }
 
-    // Internal helper: builds and saves a driver calendar event. Returns the event identifier on success.
-    private func createAndSaveDriverCalendarEvent(
-        eventTitle: String,
-        eventStartDate: Date,
-        eventEndDate: Date,
-        alarmOffsetMinutesBeforeStart: Int,
-        recurrenceWeekdays: [EKRecurrenceDayOfWeek],
-        eventNotes: String
-    ) -> String? {
-
-        let calendarEvent = EKEvent(eventStore: eventKitStore)
-        calendarEvent.title = eventTitle
-        calendarEvent.notes = eventNotes
-        calendarEvent.startDate = eventStartDate
-        calendarEvent.endDate = eventEndDate
-        calendarEvent.calendar = eventKitStore.defaultCalendarForNewEvents
-
-        let weeklyRecurrenceRule = EKRecurrenceRule(
-            recurrenceWith: .weekly,
-            interval: 1,
-            daysOfTheWeek: recurrenceWeekdays,
-            daysOfTheMonth: nil,
-            monthsOfTheYear: nil,
-            weeksOfTheYear: nil,
-            daysOfTheYear: nil,
-            setPositions: nil,
-            end: nil
-        )
-        calendarEvent.recurrenceRules = [weeklyRecurrenceRule]
-
-        let preEventAlarm = EKAlarm(relativeOffset: TimeInterval(alarmOffsetMinutesBeforeStart * 60))
-        calendarEvent.addAlarm(preEventAlarm)
-
-        do {
-            try eventKitStore.save(calendarEvent, span: .futureEvents)
-            return calendarEvent.eventIdentifier
-        } catch {
-            print("[EventKitManager] Failed to save driver calendar event '\(eventTitle)': \(error.localizedDescription)")
-            return nil
-        }
-    }
-
-    // Maps the app's day abbreviation strings to EKWeekday values
-    private func convertDayStringToEKWeekday(_ dayAbbreviationString: String) -> EKWeekday? {
-        switch dayAbbreviationString {
+    private func convertDayStringToEKWeekday(_ day: String) -> EKWeekday? {
+        switch day {
         case "Mon": return .monday
         case "Tue": return .tuesday
         case "Wed": return .wednesday
@@ -288,46 +317,28 @@ final class EventKitManager {
         case "Sat": return .saturday
         case "Sun": return .sunday
         default:
-            print("[EventKitManager] Unrecognised day string '\(dayAbbreviationString)' — skipping")
+            print("[EventKitManager] Unrecognised day string '\(day)'")
             return nil
         }
     }
 
-    // Appends new event identifiers into UserDefaults for later cleanup
-    private func appendIdentifiersToUserDefaults(newEventIdentifiers: [String]) {
-        var existingIdentifiers = loadIdentifiersFromUserDefaults()
-        existingIdentifiers.append(contentsOf: newEventIdentifiers)
-        UserDefaults.standard.set(existingIdentifiers, forKey: userDefaultsStoredEventIdentifiersKey)
+    private func appendIdentifiersToUserDefaults(newIdentifiers: [String]) {
+        var existing = loadIdentifiersFromUserDefaults()
+        existing.append(contentsOf: newIdentifiers)
+        UserDefaults.standard.set(existing, forKey: storedEventIdentifiersKey)
     }
 
-    // Loads all previously stored event identifiers from UserDefaults
     private func loadIdentifiersFromUserDefaults() -> [String] {
-        return UserDefaults.standard.stringArray(forKey: userDefaultsStoredEventIdentifiersKey) ?? []
-    }
-    
-    //Remove calendar event
-    func removeCalendarEventsForRoute(routeId: String, sessionLabel: String) {
-        let morningStorageKey = "stafflanka_eventkit_\(routeId)_morning"
-        let eveningStorageKey = "stafflanka_eventkit_\(routeId)_evening"
-
-        switch sessionLabel {
-        case "Morning":
-            removeEventsForStorageKey(morningStorageKey)
-        case "Evening":
-            removeEventsForStorageKey(eveningStorageKey)
-        default:
-            removeEventsForStorageKey(morningStorageKey)
-            removeEventsForStorageKey(eveningStorageKey)
-        }
+        UserDefaults.standard.stringArray(forKey: storedEventIdentifiersKey) ?? []
     }
 
-    private func removeEventsForStorageKey(_ storageKey: String) {
-        let storedIdentifiers = UserDefaults.standard.stringArray(forKey: storageKey) ?? []
-        for savedEventIdentifier in storedIdentifiers {
-            if let existingCalendarEvent = eventKitStore.event(withIdentifier: savedEventIdentifier) {
-                try? eventKitStore.remove(existingCalendarEvent, span: .futureEvents)
+    private func removeEventsForStorageKey(_ key: String) {
+        let identifiers = UserDefaults.standard.stringArray(forKey: key) ?? []
+        for identifier in identifiers {
+            if let event = eventKitStore.event(withIdentifier: identifier) {
+                try? eventKitStore.remove(event, span: .futureEvents)
             }
         }
-        UserDefaults.standard.removeObject(forKey: storageKey)
+        UserDefaults.standard.removeObject(forKey: key)
     }
 }

@@ -122,7 +122,7 @@ struct DriverTripSimulationView: View {
         .mapStyle(.standard(elevation: .realistic))
     }
 
-    // Translucent loading screen shown while MKDirections calculates the road path
+    //loading screen shown while MKDirections calculates the road path
     private var routeCalculationLoadingOverlay: some View {
         ZStack {
             Color.black.opacity(0.55).ignoresSafeArea()

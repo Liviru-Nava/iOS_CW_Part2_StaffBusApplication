@@ -105,17 +105,17 @@ struct DriverProfileView: View {
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(driverProfileViewModel.driverProfileInformationValues.driverFullName)
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.appSubheadline)
                             .foregroundColor(.textPrimary)
                         Text(driverProfileViewModel.driverProfileInformationValues.driverPhoneNumber)
-                            .font(.system(size: 13))
+                            .font(.appFootnote)
                             .foregroundColor(.textSecondary)
                         Text(driverProfileViewModel.driverProfileInformationValues.driverLicenseNumber)
-                            .font(.system(size: 12))
+                            .font(.appCaption)
                             .foregroundColor(.textTertiary)
                         if !driverProfileViewModel.driverProfileInformationValues.driverEmailAddress.isEmpty {
                             Text(driverProfileViewModel.driverProfileInformationValues.driverEmailAddress)
-                                .font(.system(size: 12))
+                                .font(.appCaption)
                                 .foregroundColor(.textTertiary)
                         }
                     }
@@ -124,12 +124,13 @@ struct DriverProfileView: View {
 
                     // Driver role badge
                     Text("Driver")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.appCaption2)
                         .foregroundColor(.brandAccent)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
                         .background(Color.brandAccent.opacity(0.12))
                         .clipShape(Capsule())
+                        .accessibilityHidden(true)
                 }
                 .padding(.vertical, 6)
             }
@@ -241,6 +242,8 @@ struct DriverProfileView: View {
                 profileListRow(iconName: "bell.badge.fill", iconBadgeColor: Color.statusWarning, rowTitle: "Notification Settings", rowSubtitle: nil)
             }
             .listRowBackground(Color.cardBackground)
+            .accessibilityLabel("Notification Settings")
+            .accessibilityHint("Opens notification preferences")
 
             // Face ID / Touch ID toggle shown only when biometrics are supported on the device
             if BiometricService.shared.deviceSupportsBiometricAuthentication {
@@ -264,12 +267,14 @@ struct DriverProfileView: View {
                 HStack(spacing: 12) {
                     profileIconBadge(systemIconName: "arrow.right.square.fill", badgeColor: .statusDanger)
                     Text("Sign Out")
-                        .font(.system(size: 15))
+                        .font(.appBody)
                         .foregroundColor(.statusDanger)
                 }
                 .padding(.vertical, 2)
             }
             .listRowBackground(Color.cardBackground)
+            .accessibilityLabel("Sign Out")
+            .accessibilityHint("Signs you out of your driver account")
 
             // Delete Account button
             Button(role: .destructive) {
@@ -278,12 +283,14 @@ struct DriverProfileView: View {
                 HStack(spacing: 12) {
                     profileIconBadge(systemIconName: "trash.fill", badgeColor: .statusDanger)
                     Text("Delete Account")
-                        .font(.system(size: 15))
+                        .font(.appBody)
                         .foregroundColor(.statusDanger)
                 }
                 .padding(.vertical, 2)
             }
             .listRowBackground(Color.cardBackground)
+            .accessibilityLabel("Delete Account")
+            .accessibilityHint("Permanently deletes your account and all data")
         }
     }
 
@@ -294,7 +301,7 @@ struct DriverProfileView: View {
             profileIconBadge(systemIconName: "faceid", badgeColor: Color.brandAccent)
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(BiometricService.shared.biometricTypeDisplayName) Sign-In")
-                    .font(.system(size: 15))
+                    .font(.appBody)
                     .foregroundColor(.textPrimary)
             }
             Spacer()
@@ -317,6 +324,8 @@ struct DriverProfileView: View {
             ))
             .labelsHidden()
             .tint(Color.brandAccent)
+            .accessibilityLabel("\(BiometricService.shared.biometricTypeDisplayName) Sign-In")
+            .accessibilityHint("Toggle to enable or disable biometric authentication")
         }
         .padding(.vertical, 2)
     }
@@ -327,11 +336,11 @@ struct DriverProfileView: View {
             profileIconBadge(systemIconName: iconName, badgeColor: iconBadgeColor)
             VStack(alignment: .leading, spacing: 2) {
                 Text(rowTitle)
-                    .font(.system(size: 15))
+                    .font(.appBody)
                     .foregroundColor(.textPrimary)
                 if let subtitle = rowSubtitle {
                     Text(subtitle)
-                        .font(.system(size: 12))
+                        .font(.appCaption)
                         .foregroundColor(.textSecondary)
                 }
             }
@@ -454,7 +463,7 @@ struct DriverEditProfileSheet: View {
                 .frame(width: 88, height: 88)
                 .overlay(
                     Text(driverProfileViewModel.driverProfileInitialsText)
-                        .font(.system(size: 30, weight: .bold))
+                        .font(.appTitle)
                         .foregroundColor(.white)
                 )
         }
@@ -466,8 +475,9 @@ struct DriverEditProfileSheet: View {
                 .font(.system(size: 13))
                 .foregroundColor(.brandAccent)
                 .frame(width: 18)
+                .accessibilityHidden(true)
             TextField(fieldLabel, text: boundValue)
-                .font(.system(size: 15))
+                .font(.appBody)
                 .foregroundColor(.textPrimary)
                 .tint(.brandAccent)
                 .keyboardType(keyboardType)

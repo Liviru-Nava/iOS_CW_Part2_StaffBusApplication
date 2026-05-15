@@ -347,23 +347,19 @@ struct JoinRequestView: View {
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
 
-                // Shows calendar confirmation once EventKit scheduling completes
-                if joinRequestViewModel.calendarEventSchedulingCompleted {
-                    HStack(spacing: 8) {
-                        Image(systemName: "calendar.badge.checkmark")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.statusActive)
-                        Text("Trip reminders added to your Calendar")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.textSecondary)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(Color.statusActive.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .padding(.horizontal, 30)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                HStack(spacing: 8) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.brandAccent)
+                    Text("Calendar reminders will be added once the driver accepts your request.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.textSecondary)
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color.brandAccent.opacity(0.07))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal, 30)
             }
             .padding(.horizontal, 30)
 
@@ -384,7 +380,7 @@ struct JoinRequestView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 40)
         }
-        .animation(.easeInOut(duration: 0.4), value: joinRequestViewModel.calendarEventSchedulingCompleted)
+
     }
 }
 

@@ -140,7 +140,7 @@ final class PaymentService {
     }
 }
 
-// Simple value type representing a payment record from Firestore
+// Simple value type representing a payment record from Firestore collection name payments
 struct PaymentRecord: Identifiable {
     let id: String
     let passengerId: String

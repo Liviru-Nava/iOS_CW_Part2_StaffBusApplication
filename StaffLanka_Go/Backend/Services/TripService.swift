@@ -124,7 +124,6 @@ final class TripService {
     }
 
     // Trip History Persistence
-
     func saveTripHistoryRecord(_ record: DriverHistoryTripRecord) async throws {
         let _ = try db.collection("tripHistory").addDocument(from: record)
         print(" [TripService] Saved trip history record for route: \(record.routeId)")

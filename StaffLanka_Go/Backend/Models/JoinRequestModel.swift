@@ -8,6 +8,7 @@
 import Foundation
 import FirebaseFirestore
 
+//collection name in firebase "joinRequests"
 struct JoinRequestModel: Codable, Identifiable {
     @DocumentID var id: String?
     var routeId: String
@@ -22,11 +23,9 @@ struct JoinRequestModel: Codable, Identifiable {
     var status: String             // "pending" | "accepted" | "rejected" | "cancelled"
     var createdAt: Date
 
-    // Written when a passenger removes only one session from a Both enrollment
-    // Holds the session label that was removed: "Morning" or "Evening"
+    // Written when a passenger removes only one session from a Both enrollment and holds either Morning or Evening
     var cancelledSession: String?
 
-    // Written on any cancellation to record who initiated the removal
-    // "passenger" = passenger self-cancelled; "driver" = driver removed the passenger
+    // Written on any cancellation to record who initiated the removal of the request
     var cancelledBy: String?
 }
