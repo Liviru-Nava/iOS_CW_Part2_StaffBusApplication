@@ -39,6 +39,9 @@ struct PassengerDashboard: View {
         }
         .background(Color.appBackground.ignoresSafeArea())
         .ignoresSafeArea(edges: .top)
+        .onTapGesture {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
         .navigationDestination(isPresented: $showRouteSearch) {
             RouteSearchView()
         }
@@ -76,13 +79,17 @@ struct PassengerDashboard: View {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(passengerViewModel.greetingText)
-                        .font(.system(size: 14, weight: .regular))
+                        .font(.appCaption)
                         .foregroundStyle(Color.textPrimary.opacity(0.65))
                     Text(passengerViewModel.userName.isEmpty ? "Passenger" : passengerViewModel.userName)
-                        .font(.system(size: 26, weight: .bold))
+                        .font(.appLargeTitle)
                         .foregroundStyle(Color.textPrimary)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(passengerViewModel.greetingText), \(passengerViewModel.userName.isEmpty ? "Passenger" : passengerViewModel.userName)")
+
                 Spacer()
+
                 ZStack(alignment: .topTrailing) {
                     Button {
                         showPassengerNotifications = true
@@ -95,6 +102,10 @@ struct PassengerDashboard: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(unreadNotificationCountForCurrentUser > 0
+                        ? "Notifications, \(unreadNotificationCountForCurrentUser) unread"
+                        : "Notifications")
+                    .accessibilityHint("Opens your notification centre")
 
                     if unreadNotificationCountForCurrentUser > 0 {
                         ZStack {
@@ -103,20 +114,23 @@ struct PassengerDashboard: View {
                                 .frame(width: unreadNotificationCountForCurrentUser > 9 ? 18 : 14, height: 14)
                             if unreadNotificationCountForCurrentUser > 1 {
                                 Text(unreadNotificationCountForCurrentUser > 99 ? "99+" : "\(unreadNotificationCountForCurrentUser)")
-                                    .font(.system(size: 8, weight: .bold))
+                                    .font(.appCaption2Bold)
                                     .foregroundStyle(.white)
                             }
                         }
                         .offset(x: 2, y: -2)
+                        .accessibilityHidden(true)
                     }
                 }
             }
 
-            Picker("Trip", selection: $passengerViewModel.selectedTrip) {
+            Picker("Trip session", selection: $passengerViewModel.selectedTrip) {
                 Text("Morning Trip").tag(PassengerDashboardViewModel.TripTab.morning)
                 Text("Evening Trip").tag(PassengerDashboardViewModel.TripTab.evening)
             }
             .pickerStyle(.segmented)
+            .accessibilityLabel("Trip session selector")
+            .accessibilityHint("Select morning or evening trip")
             .onAppear {
                 UISegmentedControl.appearance().selectedSegmentTintColor = UIColor.white
                 UISegmentedControl.appearance().backgroundColor = UIColor(white: 1, alpha: 0.12)
@@ -157,6 +171,7 @@ struct PassengerDashboard: View {
         .padding(20)
         .background(Color.cardBackground.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 20))
+        .accessibilityLabel("Loading your service information")
     }
 
     private func activeServiceCard(_ service: EnrolledService) -> some View {
@@ -167,12 +182,13 @@ struct PassengerDashboard: View {
                     Circle().fill(Color.brandAccent.opacity(0.12)).frame(width: 44, height: 44)
                     Image(systemName: "bus.fill").font(.system(size: 18)).foregroundStyle(Color.brandAccent)
                 }
+                .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(service.routeName)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.appSubheadline)
                         .foregroundStyle(Color.textPrimary)
                     Text(sessionBadgeLabel(service.session))
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.appCaption)
                         .foregroundStyle(Color.brandAccent)
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Color.brandAccent.opacity(0.12))
@@ -181,6 +197,8 @@ struct PassengerDashboard: View {
                 Spacer()
             }
             .padding(16)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(service.routeName), \(sessionBadgeLabel(service.session))")
 
             Divider().background(Color.divider)
 
@@ -221,16 +239,18 @@ struct PassengerDashboard: View {
                 Circle()
                     .fill(passengerViewModel.isTripActive ? Color.statusActive : (passengerViewModel.isTripCompleted ? Color.textTertiary : Color.statusWarning))
                     .frame(width: 7, height: 7)
+                    .accessibilityHidden(true)
                 Text(passengerViewModel.isTripActive ? "Trip Active"
                      : passengerViewModel.isTripCompleted ? "Trip Completed"
                      : "Awaiting Departure")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.appCaptionSemibold)
                     .foregroundStyle(passengerViewModel.isTripActive ? Color.statusActive : Color.textSecondary)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(passengerViewModel.isTripActive ? Color.statusActive.opacity(0.1) : Color.surfaceBackground)
             .clipShape(Capsule())
+            .accessibilityLabel(passengerViewModel.isTripActive ? "Trip is active" : passengerViewModel.isTripCompleted ? "Trip completed" : "Awaiting departure")
 
             Spacer()
 
@@ -239,7 +259,7 @@ struct PassengerDashboard: View {
             } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "location.fill").font(.system(size: 11, weight: .semibold))
-                    Text("Track Driver").font(.system(size: 12, weight: .semibold))
+                    Text("Track Driver").font(.appCaptionSemibold)
                 }
                 .foregroundStyle(passengerViewModel.isTripActive ? Color.brandAccent : Color.textTertiary)
                 .padding(.horizontal, 12)
@@ -252,6 +272,8 @@ struct PassengerDashboard: View {
             }
             .buttonStyle(.plain)
             .disabled(!passengerViewModel.isTripActive)
+            .accessibilityLabel("Track driver")
+            .accessibilityHint(passengerViewModel.isTripActive ? "Opens live map tracking" : "Only available when a trip is active")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -267,8 +289,9 @@ struct PassengerDashboard: View {
                     .foregroundStyle(
                         passengerViewModel.isAttendanceOutsideWindow || passengerViewModel.isAttendanceLocked
                             ? Color.textTertiary : Color.brandAccent)
+                    .accessibilityHidden(true)
                 Text(passengerViewModel.attendanceSectionTitle)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.appCaptionSemibold)
                     .foregroundStyle(
                         passengerViewModel.isAttendanceOutsideWindow || passengerViewModel.isAttendanceLocked
                             ? Color.textTertiary : Color.textPrimary)
@@ -279,20 +302,28 @@ struct PassengerDashboard: View {
                     let badgeColor: Color = att.status == "attending" ? Color.statusActive
                         : att.status == "not_sure" ? Color.statusWarning : Color.statusDanger
                     Text(badgeLabel)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.appCaption2Semibold)
                         .foregroundStyle(badgeColor)
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(badgeColor.opacity(0.1))
                         .clipShape(Capsule())
                 } else if !passengerViewModel.isAttendanceOutsideWindow {
                     Text("Not marked")
-                        .font(.system(size: 11))
+                        .font(.appCaption2)
                         .foregroundStyle(Color.textTertiary)
                 }
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel({
+                if let att = passengerViewModel.currentAttendance {
+                    let status = att.status == "attending" ? "Attending" : att.status == "not_sure" ? "Not Sure" : "Absent"
+                    return "\(passengerViewModel.attendanceSectionTitle). Current status: \(status)"
+                }
+                return passengerViewModel.attendanceSectionTitle
+            }())
 
             Text(passengerViewModel.attendanceWindowMessage)
-                .font(.system(size: 11))
+                .font(.appCaption2)
                 .foregroundStyle(
                     passengerViewModel.isAttendanceOutsideWindow || passengerViewModel.isAttendanceLocked
                         ? Color.textTertiary : Color.textSecondary)
@@ -327,7 +358,7 @@ struct PassengerDashboard: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: icon).font(.system(size: 13))
-                Text(title).font(.system(size: 13, weight: .semibold))
+                Text(title).font(.appCaptionSemibold)
             }
             .foregroundStyle(isSelected ? color : Color.textSecondary)
             .frame(maxWidth: .infinity)
@@ -338,15 +369,21 @@ struct PassengerDashboard: View {
                 isSelected ? color.opacity(0.35) : Color.divider, lineWidth: 1))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Mark attendance as \(title)")
+        .accessibilityHint("Double tap to set your attendance status for this trip")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private func serviceInfoRow(icon: String, label: String, value: String) -> some View {
         HStack(spacing: 10) {
             Image(systemName: icon).font(.system(size: 12)).foregroundStyle(Color.brandAccent).frame(width: 18)
-            Text(label).font(.system(size: 13)).foregroundStyle(Color.textTertiary).frame(width: 52, alignment: .leading)
-            Text(value).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.textPrimary)
+                .accessibilityHidden(true)
+            Text(label).font(.appFootnote).foregroundStyle(Color.textTertiary).frame(width: 52, alignment: .leading)
+            Text(value).font(.appFootnoteMedium).foregroundStyle(Color.textPrimary)
             Spacer()
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value)")
     }
 
     private func sessionBadgeLabel(_ session: EnrolledSessionType) -> String {
@@ -363,9 +400,10 @@ struct PassengerDashboard: View {
                 RoundedRectangle(cornerRadius: 14).fill(Color.brandAccent.opacity(0.13)).frame(width: 60, height: 60)
                 Image(systemName: "bus.fill").font(.system(size: 24)).foregroundStyle(Color.brandAccent)
             }
+            .accessibilityHidden(true)
             VStack(spacing: 4) {
-                Text(passengerViewModel.noServiceTitle).font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.textPrimary)
-                Text(passengerViewModel.noServiceSubtitle).font(.system(size: 14)).foregroundStyle(Color.textSecondary)
+                Text(passengerViewModel.noServiceTitle).font(.appSubheadline).foregroundStyle(Color.textPrimary)
+                Text(passengerViewModel.noServiceSubtitle).font(.appCallout).foregroundStyle(Color.textSecondary)
                     .multilineTextAlignment(.center).lineSpacing(4)
             }
         }
@@ -373,6 +411,8 @@ struct PassengerDashboard: View {
         .padding(.vertical, 30).padding(.horizontal, 20)
         .background(Color.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(passengerViewModel.noServiceTitle). \(passengerViewModel.noServiceSubtitle)")
     }
 
     private var registerRouteCard: some View {
@@ -382,10 +422,11 @@ struct PassengerDashboard: View {
                     Circle().fill(Color.brandAccent.opacity(0.13)).frame(width: 52, height: 52)
                     Image(systemName: "map.fill").font(.system(size: 22)).foregroundStyle(Color.brandAccent)
                 }
+                .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Find Your Route").font(.system(size: 17, weight: .bold)).foregroundStyle(Color.textPrimary)
+                    Text("Find Your Route").font(.appHeadline).foregroundStyle(Color.textPrimary)
                     Text("Browse available routes and register for a service that fits your schedule.")
-                        .font(.system(size: 13)).foregroundStyle(Color.textSecondary).lineSpacing(3)
+                        .font(.appFootnote).foregroundStyle(Color.textSecondary).lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -401,7 +442,7 @@ struct PassengerDashboard: View {
             Button { showRouteSearch = true } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").font(.system(size: 14, weight: .semibold))
-                    Text("Browse Routes").font(.system(size: 15, weight: .semibold))
+                    Text("Browse Routes").font(.appBodySemibold)
                 }
                 .foregroundStyle(Color.brandPrimary)
                 .frame(maxWidth: .infinity)
@@ -410,6 +451,8 @@ struct PassengerDashboard: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Browse Routes")
+            .accessibilityHint("Search for available bus routes you can register for")
         }
         .padding(20)
         .background(Color.cardBackground)
@@ -421,12 +464,15 @@ struct PassengerDashboard: View {
         HStack(alignment: .top, spacing: 12) {
             ZStack {
                 Circle().fill(Color.brandAccent.opacity(0.13)).frame(width: 26, height: 26)
-                Text(number).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.brandAccent)
+                Text(number).font(.appCaption2Bold).foregroundStyle(Color.brandAccent)
             }
-            Text(text).font(.system(size: 13)).foregroundStyle(Color.textSecondary).lineSpacing(3)
+            .accessibilityHidden(true)
+            Text(text).font(.appFootnote).foregroundStyle(Color.textSecondary).lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Step \(number): \(text)")
     }
 }
 

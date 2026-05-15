@@ -1,0 +1,25 @@
+{
+  "configurations" : [
+    {
+      "id" : "0D6415F3-A4C9-4DB9-9AF1-998E07DA1FF3",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:StaffLanka_Go.xcodeproj",
+        "identifier" : "5A240F552FB5B7EF00729737",
+        "name" : "StaffLanka_GoTests"
+      }
+    }
+  ],
+  "version" : 1
+}

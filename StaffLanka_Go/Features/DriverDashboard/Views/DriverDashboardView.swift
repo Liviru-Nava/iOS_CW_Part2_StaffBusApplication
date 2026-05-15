@@ -27,6 +27,9 @@ struct DriverDashboardView: View {
         }
         .background(Color.appBackground.ignoresSafeArea())
         .ignoresSafeArea(edges: .top)
+        .onTapGesture {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
         .onAppear {
             dashboardViewModel.fetchDriverData()
             NotificationManager.shared.requestPermissions()
@@ -54,17 +57,18 @@ struct DriverDashboardView: View {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(dashboardViewModel.greetingText)
-                        .font(.system(size: 14, weight: .regular))
+                        .font(.appCaption)
                         .foregroundStyle(Color.textPrimary.opacity(0.65))
                     Text(dashboardViewModel.driverFullName)
-                        .font(.system(size: 26, weight: .bold))
+                        .font(.appLargeTitle)
                         .foregroundStyle(Color.textPrimary)
                     HStack(spacing: 5) {
                         Image(systemName: "person.2.fill")
                             .font(.system(size: 11))
                             .foregroundStyle(Color.brandAccent)
+                            .accessibilityHidden(true)
                         Text("\(dashboardViewModel.totalEnrolledPassengerCount) passengers enrolled")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.appCaptionMedium)
                             .foregroundStyle(Color.textSecondary)
                     }
                 }
@@ -83,11 +87,14 @@ struct DriverDashboardView: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Notifications")
+                    .accessibilityHint("Opens driver notifications")
 
                     Circle()
                         .fill(Color.statusWarning)
                         .frame(width: 9, height: 9)
                         .offset(x: 1, y: -1)
+                        .accessibilityHidden(true)
                 }
             }
 
@@ -96,6 +103,8 @@ struct DriverDashboardView: View {
                 Text("Evening").tag(DriverDashboardViewModel.SessionType.evening)
             }
             .pickerStyle(.segmented)
+            .accessibilityLabel("Session selector")
+            .accessibilityHint("Choose morning or evening trip session")
             .onAppear {
                 UISegmentedControl.appearance().selectedSegmentTintColor = UIColor.white
                 UISegmentedControl.appearance().backgroundColor = UIColor(white: 1, alpha: 0.12)
@@ -148,10 +157,10 @@ struct DriverDashboardView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Upcoming Trip")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.appCaptionMedium)
                         .foregroundStyle(Color.textTertiary)
                     Text(dashboardViewModel.selectedSessionType == .morning ? "Morning Session" : "Evening Session")
-                        .font(.system(size: 17, weight: .bold))
+                        .font(.appHeadline)
                         .foregroundStyle(Color.textPrimary)
                 }
                 Spacer()
@@ -199,7 +208,7 @@ struct DriverDashboardView: View {
                         Image(systemName: "play.fill")
                             .font(.system(size: 12, weight: .semibold))
                         Text(dashboardViewModel.isStartTripButtonEnabled ? "Start Trip" : "Not Available Yet")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.appCalloutSemibold)
                     }
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -213,6 +222,8 @@ struct DriverDashboardView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!dashboardViewModel.isStartTripButtonEnabled)
+                .accessibilityLabel(dashboardViewModel.isStartTripButtonEnabled ? "Start Trip" : "Trip not available yet")
+                .accessibilityHint(dashboardViewModel.isStartTripButtonEnabled ? "Begins the trip simulation" : "Trip can only start within the scheduled window")
 
                 Button {
                     showRouteMapFullScreen = true
@@ -221,7 +232,7 @@ struct DriverDashboardView: View {
                         Image(systemName: "scope")
                             .font(.system(size: 12, weight: .semibold))
                         Text("View Live Route")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.appCalloutSemibold)
                     }
                     .foregroundStyle(Color.brandAccent)
                     .frame(maxWidth: .infinity)
@@ -231,6 +242,8 @@ struct DriverDashboardView: View {
                     .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.brandAccent.opacity(0.25), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("View live route")
+                .accessibilityHint("Opens the full-screen route map")
             }
 
             if !dashboardViewModel.sessionWindowHint.isEmpty {
@@ -238,11 +251,14 @@ struct DriverDashboardView: View {
                     Image(systemName: "clock.badge.exclamationmark")
                         .font(.system(size: 11))
                         .foregroundStyle(Color.statusWarning)
+                        .accessibilityHidden(true)
                     Text(dashboardViewModel.sessionWindowHint)
-                        .font(.system(size: 12))
+                        .font(.appCaption)
                         .foregroundStyle(Color.textTertiary)
                 }
                 .padding(.vertical, 4)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(dashboardViewModel.sessionWindowHint)
             }
 
         }
@@ -280,12 +296,13 @@ struct DriverDashboardView: View {
                         Circle()
                             .fill(Color.statusActive)
                             .frame(width: 8, height: 8)
+                            .accessibilityHidden(true)
                         Text("Trip In Progress")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.appCaptionSemibold)
                             .foregroundStyle(Color.statusActive)
                     }
                     Text(dashboardViewModel.selectedSessionType == .morning ? "Morning Session" : "Evening Session")
-                        .font(.system(size: 17, weight: .bold))
+                        .font(.appHeadline)
                         .foregroundStyle(Color.textPrimary)
                 }
                 Spacer()
@@ -323,7 +340,7 @@ struct DriverDashboardView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 14, weight: .semibold))
                     Text("Finish Trip")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.appBodySemibold)
                 }
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -339,6 +356,8 @@ struct DriverDashboardView: View {
             }
             .buttonStyle(.plain)
             .disabled(!dashboardViewModel.isNearEndingLocation)
+            .accessibilityLabel("Finish Trip")
+            .accessibilityHint(dashboardViewModel.isNearEndingLocation ? "Marks the trip as complete" : "Available only when the bus is near the final stop")
         }
         .padding(18)
         .background(Color.cardBackground)
@@ -387,17 +406,20 @@ struct DriverDashboardView: View {
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text("Trip Completed")
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.appHeadline)
                     .foregroundStyle(Color.textPrimary)
                 HStack(spacing: 4) {
                     Image(systemName: "person.2.fill")
                         .font(.system(size: 11))
                         .foregroundStyle(Color.brandAccent)
+                        .accessibilityHidden(true)
                     Text("\(dashboardViewModel.totalPassengersForCurrentSummary) passengers transported")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.appCaptionMedium)
                         .foregroundStyle(Color.textSecondary)
                 }
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Trip completed. \(dashboardViewModel.totalPassengersForCurrentSummary) passengers transported")
             Spacer()
         }
         .padding(18)
@@ -448,11 +470,11 @@ struct DriverDashboardView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Passenger Attendance")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.appSubheadline)
                     .foregroundStyle(Color.textPrimary)
                 Spacer()
                 Text("\(dashboardViewModel.currentSessionAttendanceStops.count) stops")
-                    .font(.system(size: 12))
+                    .font(.appCaption)
                     .foregroundStyle(Color.textTertiary)
             }
 
@@ -487,10 +509,10 @@ struct DriverDashboardView: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(attendanceStop.stopName)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.appCalloutMedium)
                     .foregroundStyle(Color.textPrimary)
                 Text(attendanceStop.confirmedPassengerCount == 0 ? "No passengers confirmed" : "Expecting \(attendanceStop.confirmedPassengerCount) passenger\(attendanceStop.confirmedPassengerCount == 1 ? "" : "s")")
-                    .font(.system(size: 12))
+                    .font(.appCaption)
                     .foregroundStyle(Color.textSecondary)
             }
             Spacer()
@@ -513,11 +535,11 @@ struct DriverDashboardView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Active Stops")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.appSubheadline)
                     .foregroundStyle(Color.textPrimary)
                 Spacer()
                 Text("\(dashboardViewModel.currentSessionActiveStops.count) stops")
-                    .font(.system(size: 12))
+                    .font(.appCaption)
                     .foregroundStyle(Color.textTertiary)
             }
 
@@ -549,10 +571,10 @@ struct DriverDashboardView: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(activeStop.stopName)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.appCalloutMedium)
                     .foregroundStyle(isCurrentActiveStop ? Color.textPrimary : Color.textSecondary)
                 Text("Expecting \(activeStop.passengerCount) passenger\(activeStop.passengerCount == 1 ? "" : "s")")
-                    .font(.system(size: 12))
+                    .font(.appCaption)
                     .foregroundStyle(Color.textTertiary)
             }
             Spacer()
@@ -615,7 +637,7 @@ struct DriverDashboardView: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("Trip Summary")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.appSubheadline)
                     .foregroundStyle(Color.textPrimary)
                 Spacer()
             }
@@ -854,7 +876,6 @@ struct RouteMapFullscreenView: View {
 
             // Close button overlay
             HStack {
-                Spacer()
                 Button {
                     isPresented = false
                 } label: {
@@ -866,8 +887,9 @@ struct RouteMapFullscreenView: View {
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .padding(.trailing, 16)
+                .padding(.leading, 16)
                 .padding(.top, 44)
+                Spacer()
             }
         }
     }

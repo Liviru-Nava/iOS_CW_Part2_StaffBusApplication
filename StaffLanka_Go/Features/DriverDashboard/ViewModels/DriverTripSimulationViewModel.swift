@@ -2,11 +2,7 @@
 //  DriverTripSimulationViewModel.swift
 //  StaffLanka_Go
 //
-
-//
-//  DriverTripSimulationViewModel.swift
-//  StaffLanka_Go
-//
+//  Created by Liviru Navaratna on 2026-05-11
 
 import Foundation
 import MapKit
@@ -180,7 +176,7 @@ final class DriverTripSimulationViewModel: ObservableObject {
                 assembledPathCoordinates.append(contentsOf: legCoordinates)
                 print(" [SimulationVM] Leg \(legIndex) road route: \(legCoordinates.count) points")
             } else {
-                // Fallback: linear interpolation if MKDirections fails for this leg
+                //linear interpolation if MKDirections fails for this leg
                 let fallbackPoints = linearInterpolatedCoordinates(
                     from: legStartStop.coordinate,
                     to: legEndStop.coordinate,

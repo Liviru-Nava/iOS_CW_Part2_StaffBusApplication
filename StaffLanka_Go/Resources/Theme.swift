@@ -120,3 +120,49 @@ extension LinearGradient {
         endPoint: .bottomTrailing
     )
 }
+
+
+// All fonts use SwiftUI's semantic text styles which automatically for Dynamic Large Text
+extension Font {
+    // Display / large headings  (~26-28 pt at default size)
+    static let appLargeTitle   = Font.largeTitle.weight(.bold)
+
+    // Section titles / card headings (~20-22 pt)
+    static let appTitle        = Font.title2.weight(.bold)
+
+    // Sub-section / dialog headings (~18 pt)
+    static let appTitle3       = Font.title3.weight(.bold)
+
+    // Prominent labels, nav titles (~17 pt semibold)
+    static let appHeadline     = Font.headline              // semibold by default
+
+    // Secondary headings / button text (~15-16 pt semibold)
+    static let appSubheadline  = Font.subheadline.weight(.semibold)
+
+    // Standard body copy (~15-16 pt)
+    static let appBody         = Font.body
+    static let appBodyMedium   = Font.body.weight(.medium)
+    static let appBodySemibold = Font.body.weight(.semibold)
+    static let appBodyBold     = Font.body.weight(.bold)
+
+    // Supporting callout (~14 pt)
+    static let appCallout      = Font.callout
+    static let appCalloutMedium = Font.callout.weight(.medium)
+    static let appCalloutSemibold = Font.callout.weight(.semibold)
+    static let appCalloutBold  = Font.callout.weight(.bold)
+
+    // Footnote / supporting labels (~13 pt)
+    static let appFootnote     = Font.footnote
+    static let appFootnoteMedium = Font.footnote.weight(.medium)
+    static let appFootnoteSemibold = Font.footnote.weight(.semibold)
+
+    // Small captions (~11-12 pt)
+    static let appCaption      = Font.caption
+    static let appCaptionMedium = Font.caption.weight(.medium)
+    static let appCaptionSemibold = Font.caption.weight(.semibold)
+
+    // Smallest labels / badges (~9-10 pt)
+    static let appCaption2     = Font.caption2
+    static let appCaption2Semibold = Font.caption2.weight(.semibold)
+    static let appCaption2Bold = Font.caption2.weight(.bold)
+}

@@ -67,6 +67,16 @@ final class PassengerDashboardViewModel: ObservableObject {
         return Calendar.current.isDateInToday(trip.tripDate)
     }
 
+    //Returns true if today's weekday abbreviation (e.g. "Mon", "Tue") is in the
+    //service's activeDays list.  When activeDays is empty we assume all days operate.
+    private func todayIsOperatingDay(for service: EnrolledService?) -> Bool {
+        guard let service = service, !service.activeDays.isEmpty else { return true }
+        let weekdaySymbols = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        let weekdayIndex = Calendar.current.component(.weekday, from: Date()) - 1 // 1-based → 0-based
+        let todayAbbrev = weekdaySymbols[weekdayIndex]
+        return service.activeDays.contains(todayAbbrev)
+    }
+
     private enum AttendanceWindowState {
         case morningWindowAvailable
         case morningWindowLocked
@@ -80,16 +90,29 @@ final class PassengerDashboardViewModel: ObservableObject {
         let inMorningWindow = Calendar.current.component(.hour, from: Date()) < 12
         switch selectedTrip {
         case .morning:
+            // If today is not an operating day for the morning service, show nothing.
+            // Exception: if the evening trip was just completed today we allow marking
+            // tomorrow's morning attendance regardless of today's day status.
+            let eveningDone = eveningTrip != nil
+                && eveningTrip!.status == "completed"
+                && Calendar.current.isDateInToday(eveningTrip!.tripDate)
+
+            if !todayIsOperatingDay(for: morningService) {
+                // Still allow "tomorrow morning" marking after evening trip ends
+                return eveningDone ? .tomorrowMorningAvailable : .outsideWindow
+            }
+
             if inMorningWindow {
                 let isPassed = (morningTrip?.currentStopIndex ?? 0) > 3
                 if isPassed || isTripCompleted { return .morningWindowLocked }
                 return .morningWindowAvailable
             }
-            let eveningDone = eveningTrip != nil
-                && eveningTrip!.status == "completed"
-                && Calendar.current.isDateInToday(eveningTrip!.tripDate)
             return eveningDone ? .tomorrowMorningAvailable : .outsideWindow
+
         case .evening:
+            // If today is not an operating day for the evening service, hide attendance.
+            if !todayIsOperatingDay(for: eveningService) { return .outsideWindow }
+
             if !inMorningWindow {
                 let isPassed = (eveningTrip?.currentStopIndex ?? 0) > 3
                 if isPassed || isTripCompleted { return .eveningWindowLocked }
@@ -130,8 +153,19 @@ final class PassengerDashboardViewModel: ObservableObject {
         case .tomorrowMorningAvailable:
             return "Mark your attendance for tomorrow's morning trip"
         case .outsideWindow where selectedTrip == .morning:
+            // Check if the service doesn't operate today
+            let service = morningService
+            if let service = service, !service.activeDays.isEmpty, !todayIsOperatingDay(for: service) {
+                let daysLabel = service.activeDays.joined(separator: ", ")
+                return "No morning service today — this route operates on: \(daysLabel)"
+            }
             return "Morning attendance is only available 12:00 AM \u{2013} 11:59 AM"
         default:
+            let service = eveningService
+            if let service = service, !service.activeDays.isEmpty, !todayIsOperatingDay(for: service) {
+                let daysLabel = service.activeDays.joined(separator: ", ")
+                return "No evening service today — this route operates on: \(daysLabel)"
+            }
             return "Evening attendance is only available 12:00 PM \u{2013} 11:59 PM"
         }
     }
@@ -630,7 +664,8 @@ final class PassengerDashboardViewModel: ObservableObject {
             morning: resolvedSessionType == .both || resolvedSessionType == .morning ? morningSessionInfo : nil,
             evening: resolvedSessionType == .both || resolvedSessionType == .evening ? eveningSessionInfo : nil,
             monthlyFee: resolvedSessionFee,
-            isActive: true
+            isActive: true,
+            activeDays: route.scheduleEntries.first?.activeDays ?? []
         )
     }
 }

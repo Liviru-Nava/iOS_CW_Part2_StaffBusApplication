@@ -1,3 +1,9 @@
+//
+//  DriverChangePhoneOTPView.swift
+//  StaffLanka_Go
+//
+//  Created by Liviru Navaratna on 2026-04-10.
+
 import SwiftUI
 
 struct DriverChangePhoneOTPView: View {
@@ -5,7 +11,7 @@ struct DriverChangePhoneOTPView: View {
     let phoneNumber: String
 
     @StateObject private var otpViewModel: DriverChangePhoneOTPViewModel
-    @State private var activeIndex: Int = 0
+    @State private var currentlyActiveBoxIndex: Int = 0
     @FocusState private var inputFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
@@ -17,7 +23,11 @@ struct DriverChangePhoneOTPView: View {
 
     var body: some View {
         ZStack {
+            // Background tap dismisses the number pad (Issue 1 / keyboard fix).
             Color.appBackground.ignoresSafeArea()
+                .onTapGesture {
+                    inputFocused = false
+                }
 
             VStack(spacing: 32) {
                 headerSection
@@ -52,9 +62,8 @@ struct DriverChangePhoneOTPView: View {
         .onChange(of: otpViewModel.state) { _, newState in
             if newState == .success {
                 driverProfileViewModel.saveDriverProfileEdits()
-                dismiss() // This might just navigate back 1 view. Wait, actually we can navigate twice or just dismiss the whole sheet?
-                // The issue is `isEditingDriverProfile` can be set to false.
                 driverProfileViewModel.isEditingDriverProfile = false
+                dismiss()
             }
         }
     }
@@ -81,41 +90,19 @@ struct DriverChangePhoneOTPView: View {
         }
     }
 
+
     private var otpBoxRow: some View {
         HStack(spacing: 10) {
             ForEach(0..<6, id: \.self) { i in
-                driverOTPBox(index: i)
-                    .onTapGesture {
-                        activeIndex = i
-                        inputFocused = true
-                    }
-            }
-        }
-    }
-
-    private func driverOTPBox(index: Int) -> some View {
-        let digit: String = {
-            let chars = Array(otpViewModel.enteredOTP)
-            return index < chars.count ? String(chars[index]) : ""
-        }()
-        let isFilled = index < otpViewModel.enteredOTP.count
-
-        return ZStack {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.cardBackground)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(
-                            isFilled ? Color.brandAccent : Color.divider,
-                            lineWidth: isFilled ? 2 : 1
-                        )
+                OTPDigitBox(
+                    digit: otpViewModel.otpDigits[i],
+                    isActive: currentlyActiveBoxIndex == i
                 )
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-
-            Text(digit)
-                .font(.system(size: 22, weight: .bold, design: .monospaced))
-                .foregroundStyle(Color.textPrimary)
+                .onTapGesture {
+                    currentlyActiveBoxIndex = i
+                    inputFocused = true
+                }
+            }
         }
     }
 
@@ -129,7 +116,7 @@ struct DriverChangePhoneOTPView: View {
                         ? String(digits[digits.index(digits.startIndex, offsetBy: i)])
                         : ""
                 }
-                activeIndex = min(digits.count, 5)
+                currentlyActiveBoxIndex = min(digits.count, 5)
             }
         ))
         .keyboardType(.numberPad)

@@ -238,11 +238,11 @@ struct PassengerTripTrackingView: View {
                     .frame(width: 4, height: 38)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(buttonLabel)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.appFootnoteSemibold)
                         .foregroundStyle(Color.textPrimary)
                         .multilineTextAlignment(.leading)
                     Text(buttonSubtitle)
-                        .font(.system(size: 11))
+                        .font(.appCaption2)
                         .foregroundStyle(Color.textSecondary)
                         .multilineTextAlignment(.leading)
                 }
@@ -319,20 +319,25 @@ struct PassengerTripTrackingView: View {
                             .background(Circle().fill(Color.cardBackground))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Close trip tracking")
+                    .accessibilityHint("Returns to the passenger dashboard")
 
                     Spacer()
 
                     VStack(spacing: 2) {
                         Text("Live Tracking")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.appCalloutBold)
                             .foregroundStyle(Color.textPrimary)
                         HStack(spacing: 4) {
                             Circle().fill(Color.statusActive).frame(width: 6, height: 6)
+                                .accessibilityHidden(true)
                             Text("Active")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.appCaption2Semibold)
                                 .foregroundStyle(Color.statusActive)
                         }
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Live tracking active")
 
                     Spacer()
 
@@ -348,20 +353,23 @@ struct PassengerTripTrackingView: View {
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(driverName)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.appCalloutSemibold)
                             .foregroundStyle(Color.textPrimary)
                         Text(plateNumber)
-                            .font(.system(size: 12))
+                            .font(.appCaption)
                             .foregroundStyle(Color.textSecondary)
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Driver: \(driverName), plate \(plateNumber)")
                     Spacer()
                     Text(session)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.appCaptionSemibold)
                         .foregroundStyle(Color.brandAccent)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(Color.brandAccent.opacity(0.12))
                         .clipShape(Capsule())
+                        .accessibilityLabel("\(session) session")
                 }
 
                 if let updated = tripTrackingViewModel.locationUpdatedAt {
@@ -369,8 +377,9 @@ struct PassengerTripTrackingView: View {
                         Image(systemName: "location.fill")
                             .font(.system(size: 10))
                             .foregroundStyle(Color.textTertiary)
+                            .accessibilityHidden(true)
                         Text("Location updated \(updated.formatted(.relative(presentation: .numeric)))")
-                            .font(.system(size: 11))
+                            .font(.appCaption2)
                             .foregroundStyle(Color.textTertiary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -396,15 +405,16 @@ struct PassengerTripTrackingView: View {
                 Image(systemName: "checkmark.seal.fill")
                     .font(.system(size: 60))
                     .foregroundStyle(Color.statusActive)
+                    .accessibilityHidden(true)
                 Text("Trip Completed")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.appTitle3)
                     .foregroundStyle(.white)
                 Text("The driver has reached the destination.")
-                    .font(.system(size: 14))
+                    .font(.appCallout)
                     .foregroundStyle(.white.opacity(0.8))
                 Button { dismiss() } label: {
                     Text("Close")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.appBodySemibold)
                         .foregroundStyle(Color.brandPrimary)
                         .frame(width: 140)
                         .padding(.vertical, 13)
@@ -412,6 +422,8 @@ struct PassengerTripTrackingView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Close")
+                .accessibilityHint("Dismisses the trip completed screen")
             }
             .padding(30)
         }

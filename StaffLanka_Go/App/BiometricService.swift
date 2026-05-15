@@ -14,6 +14,7 @@ final class BiometricService {
 
     private init() {}
 
+    
     var deviceSupportsBiometricAuthentication: Bool {
         let authenticationContext = LAContext()
         var evaluationError: NSError?

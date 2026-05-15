@@ -1,5 +1,5 @@
 //
-//  Untitled.swift
+//  PassengerLiveActivityManager.swift
 //  StaffLanka_Go
 //
 //  Created by Liviru Navaratna on 2026-05-08.
@@ -17,6 +17,15 @@ final class PassengerLiveActivityManager: ObservableObject {
 
     private var currentlyRunningLiveActivity: Activity<StaffLankaGoTripActivityAttributes>? = nil
 
+    // Attempts to resume an existing live activity if the app was backgrounded or restarted
+    func resumeExistingLiveActivityIfPresent() {
+        let existingActivities = Activity<StaffLankaGoTripActivityAttributes>.activities
+        if let resumedActivity = existingActivities.first {
+            currentlyRunningLiveActivity = resumedActivity
+            print("[PassengerLiveActivityManager] Resumed existing Live Activity — id: \(resumedActivity.id)")
+        }
+    }
+
     func startLiveActivityForPassengerTrip(
         routeDisplayName: String,
         passengerFullName: String,
@@ -27,7 +36,8 @@ final class PassengerLiveActivityManager: ObservableObject {
         nameOfCurrentBusStop: String,
         numberOfStopsUntilPickup: Int
     ) {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+        let authInfo = ActivityAuthorizationInfo()
+        guard authInfo.areActivitiesEnabled else {
             print("[PassengerLiveActivityManager] Live Activities are not enabled on this device or in Settings.")
             return
         }
@@ -49,9 +59,10 @@ final class PassengerLiveActivityManager: ObservableObject {
             passengerDropOffStopName: passengerDropOffStopName
         )
 
+        // Use a 4-hour stale date so the activity remains valid on real devices
         let activityContent = ActivityContent(
             state: initialContentState,
-            staleDate: Calendar.current.date(byAdding: .minute, value: 45, to: Date())
+            staleDate: Calendar.current.date(byAdding: .hour, value: 4, to: Date())
         )
 
         do {
@@ -61,7 +72,7 @@ final class PassengerLiveActivityManager: ObservableObject {
                 pushType: nil
             )
             currentlyRunningLiveActivity = launchedActivity
-            print("[PassengerLiveActivityManager] Live Activity started successfully — id: \(launchedActivity.id)")
+            print("[PassengerLiveActivityManager] Live Activity started — id: \(launchedActivity.id)")
         } catch {
             print("[PassengerLiveActivityManager] Failed to start Live Activity: \(error.localizedDescription)")
         }
@@ -76,6 +87,11 @@ final class PassengerLiveActivityManager: ObservableObject {
         passengerPickupStopName: String,
         passengerDropOffStopName: String
     ) {
+        // If the in-memory reference was lost (e.g. app restart), attempt recovery first
+        if currentlyRunningLiveActivity == nil {
+            resumeExistingLiveActivityIfPresent()
+        }
+
         guard let activeActivity = currentlyRunningLiveActivity else {
             print("[PassengerLiveActivityManager] No active Live Activity to update.")
             return
@@ -91,18 +107,22 @@ final class PassengerLiveActivityManager: ObservableObject {
             passengerDropOffStopName: passengerDropOffStopName
         )
 
+        // Refresh the stale date on every update so the activity never goes stale mid-trip
         let updatedActivityContent = ActivityContent(
             state: updatedContentState,
-            staleDate: Calendar.current.date(byAdding: .minute, value: 45, to: Date())
+            staleDate: Calendar.current.date(byAdding: .hour, value: 4, to: Date())
         )
 
         Task {
             await activeActivity.update(updatedActivityContent)
-            print("[PassengerLiveActivityManager] Live Activity updated — current stop: \(nameOfCurrentBusStop), stops remaining: \(numberOfStopsRemainingUntilPassengerRelevantStop), picked up: \(passengerHasAlreadyBeenPickedUp)")
+            print("[PassengerLiveActivityManager] Updated — stop: \(nameOfCurrentBusStop), remaining: \(numberOfStopsRemainingUntilPassengerRelevantStop), pickedUp: \(passengerHasAlreadyBeenPickedUp)")
         }
     }
 
     func endLiveActivityAfterTripCompletion() {
+        if currentlyRunningLiveActivity == nil {
+            resumeExistingLiveActivityIfPresent()
+        }
         guard let activeActivity = currentlyRunningLiveActivity else { return }
 
         Task {

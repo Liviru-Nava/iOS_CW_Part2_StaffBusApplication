@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		5A23192F2F9783C3003EC56B /* StaffLanka-Go-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5A23192E2F9783C3003EC56B /* StaffLanka-Go-Info.plist */; };
+		5A240F6D2FB5C11800729737 /* StaffLanka_Go.xctestplan in Resources */ = {isa = PBXBuildFile; fileRef = 5A240F6C2FB5C10F00729737 /* StaffLanka_Go.xctestplan */; };
 		5A7A3D0C2F8B91BC008D34BE /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 5A7A3D0B2F8B91BC008D34BE /* FirebaseAuth */; };
 		5A7A3D122F8B94C3008D34BE /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5A7A3D112F8B94C3008D34BE /* GoogleService-Info.plist */; };
 		5A7A3D262F8BDAAA008D34BE /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 5A7A3D252F8BDAAA008D34BE /* FirebaseFirestore */; };
@@ -21,6 +22,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		5A240F5A2FB5B7EF00729737 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5A826B3B2F7191960044237A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5A826B422F7191960044237A;
+			remoteInfo = StaffLanka_Go;
+		};
 		5ABBF1F92FADC71D00DB335D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 5A826B3B2F7191960044237A /* Project object */;
@@ -46,6 +54,9 @@
 
 /* Begin PBXFileReference section */
 		5A23192E2F9783C3003EC56B /* StaffLanka-Go-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "StaffLanka-Go-Info.plist"; sourceTree = "<group>"; };
+		5A240F562FB5B7EF00729737 /* StaffLanka_GoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StaffLanka_GoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		5A240F6C2FB5C10F00729737 /* StaffLanka_Go.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = StaffLanka_Go.xctestplan; sourceTree = "<group>"; };
+		5A240F6E2FB5C33E00729737 /* StaffLanka_GoTests.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = StaffLanka_GoTests.xctestplan; sourceTree = "<group>"; };
 		5A7A3D112F8B94C3008D34BE /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		5A826B432F7191960044237A /* StaffLanka_Go.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StaffLanka_Go.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5ABBF1E82FADC71B00DB335D /* StaffLankaGoWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StaffLankaGoWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -74,6 +85,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		5A240F572FB5B7EF00729737 /* StaffLanka_GoTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = StaffLanka_GoTests;
+			sourceTree = "<group>";
+		};
 		5A826B452F7191960044237A /* StaffLanka_Go */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -93,6 +109,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		5A240F532FB5B7EF00729737 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5A826B402F7191960044237A /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -132,9 +155,12 @@
 		5A826B3A2F7191960044237A = {
 			isa = PBXGroup;
 			children = (
+				5A240F6E2FB5C33E00729737 /* StaffLanka_GoTests.xctestplan */,
+				5A240F6C2FB5C10F00729737 /* StaffLanka_Go.xctestplan */,
 				5A23192E2F9783C3003EC56B /* StaffLanka-Go-Info.plist */,
 				5A826B452F7191960044237A /* StaffLanka_Go */,
 				5ABBF1ED2FADC71C00DB335D /* StaffLankaGoWidgetExtension */,
+				5A240F572FB5B7EF00729737 /* StaffLanka_GoTests */,
 				5A826B442F7191960044237A /* Products */,
 				5A7A3D112F8B94C3008D34BE /* GoogleService-Info.plist */,
 				5A7A3D242F8BDAAA008D34BE /* Frameworks */,
@@ -146,6 +172,7 @@
 			children = (
 				5A826B432F7191960044237A /* StaffLanka_Go.app */,
 				5ABBF1E82FADC71B00DB335D /* StaffLankaGoWidgetExtensionExtension.appex */,
+				5A240F562FB5B7EF00729737 /* StaffLanka_GoTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -153,6 +180,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		5A240F552FB5B7EF00729737 /* StaffLanka_GoTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5A240F5E2FB5B7EF00729737 /* Build configuration list for PBXNativeTarget "StaffLanka_GoTests" */;
+			buildPhases = (
+				5A240F522FB5B7EF00729737 /* Sources */,
+				5A240F532FB5B7EF00729737 /* Frameworks */,
+				5A240F542FB5B7EF00729737 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5A240F5B2FB5B7EF00729737 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				5A240F572FB5B7EF00729737 /* StaffLanka_GoTests */,
+			);
+			name = StaffLanka_GoTests;
+			packageProductDependencies = (
+			);
+			productName = StaffLanka_GoTests;
+			productReference = 5A240F562FB5B7EF00729737 /* StaffLanka_GoTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		5A826B422F7191960044237A /* StaffLanka_Go */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 5A826B4E2F7191970044237A /* Build configuration list for PBXNativeTarget "StaffLanka_Go" */;
@@ -212,6 +262,10 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
+					5A240F552FB5B7EF00729737 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 5A826B422F7191960044237A;
+					};
 					5A826B422F7191960044237A = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -240,11 +294,20 @@
 			targets = (
 				5A826B422F7191960044237A /* StaffLanka_Go */,
 				5ABBF1E72FADC71B00DB335D /* StaffLankaGoWidgetExtensionExtension */,
+				5A240F552FB5B7EF00729737 /* StaffLanka_GoTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		5A240F542FB5B7EF00729737 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5A240F6D2FB5C11800729737 /* StaffLanka_Go.xctestplan in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5A826B412F7191960044237A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -264,6 +327,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		5A240F522FB5B7EF00729737 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5A826B3F2F7191960044237A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -281,6 +351,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		5A240F5B2FB5B7EF00729737 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5A826B422F7191960044237A /* StaffLanka_Go */;
+			targetProxy = 5A240F5A2FB5B7EF00729737 /* PBXContainerItemProxy */;
+		};
 		5ABBF1FA2FADC71D00DB335D /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 5ABBF1E72FADC71B00DB335D /* StaffLankaGoWidgetExtensionExtension */;
@@ -289,6 +364,48 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		5A240F5C2FB5B7EF00729737 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W2JVDPC4G5;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.002.app.StaffLanka-Go.StaffLanka-GoTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/StaffLanka_Go.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/StaffLanka_Go";
+			};
+			name = Debug;
+		};
+		5A240F5D2FB5B7EF00729737 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = W2JVDPC4G5;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.002.app.StaffLanka-Go.StaffLanka-GoTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/StaffLanka_Go.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/StaffLanka_Go";
+			};
+			name = Release;
+		};
 		5A826B4C2F7191970044237A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -391,6 +508,7 @@
 				DEVELOPMENT_TEAM = W2JVDPC4G5;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -544,6 +662,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		5A240F5E2FB5B7EF00729737 /* Build configuration list for PBXNativeTarget "StaffLanka_GoTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5A240F5C2FB5B7EF00729737 /* Debug */,
+				5A240F5D2FB5B7EF00729737 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		5A826B3E2F7191960044237A /* Build configuration list for PBXProject "StaffLanka_Go" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

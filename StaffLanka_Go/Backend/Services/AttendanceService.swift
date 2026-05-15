@@ -17,7 +17,6 @@ final class AttendanceService {
     private let collection = "attendance"
 
     // Mark or update attendance
-
     // Creates or overwrites the attendance document for a given passenger/route/session/date.
     // Uses a deterministic document ID so upserts are idempotent.
     func markAttendance(
@@ -48,7 +47,6 @@ final class AttendanceService {
     }
 
     // Fetch attendance for a specific date
-
     func fetchAttendance(
         passengerId: String,
         routeId: String,
@@ -65,7 +63,6 @@ final class AttendanceService {
     }
 
     // Real-time listener for today's (or tomorrow's) attendance
-
     // Listens to the attendance document for `date` (defaults to next calendar day after 6 PM, today otherwise).
     func listenForAttendance(
         passengerId: String,
@@ -126,8 +123,6 @@ final class AttendanceService {
                 onChange(models)
             }
     }
-
-    // Helper: which date should attendance be marked for?
 
     // Returns tomorrow if the current time is after 6 PM (trip done for today), otherwise returns today.
     static func relevantDate() -> Date {

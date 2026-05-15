@@ -13,11 +13,13 @@ struct LoginView: View {
     @EnvironmentObject private var authManager: AuthManager
     @State private var navigateToOTPVerification = false
     @State private var isBiometricAuthenticationInProgress = false
+    @FocusState private var isPhoneFieldFocused: Bool
 
     var body: some View {
         NavigationStack {
             ZStack {
                 Color.appBackground.ignoresSafeArea()
+                    .onTapGesture { isPhoneFieldFocused = false }
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
@@ -31,9 +33,6 @@ struct LoginView: View {
                             if loginViewModel.shouldShowBiometricLoginButton {
                                 biometricDividerRow
                                 biometricLoginButton
-                            } else {
-                                dividerRow
-                                socialRow
                             }
                             driverRegisterRow
                         }
@@ -64,43 +63,51 @@ struct LoginView: View {
                     .font(.system(size: 40, weight: .semibold))
                     .foregroundColor(.brandAccent)
             }
+            .accessibilityHidden(true)
 
             Text("StaffLanka Go")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .font(.appLargeTitle)
                 .foregroundColor(.textPrimary)
 
             Text("Your smart commute companion")
-                .font(.system(size: 15, weight: .regular))
+                .font(.appBody)
                 .foregroundColor(.textSecondary)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("StaffLanka Go. Your smart commute companion.")
     }
 
     private var phoneInputSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Mobile Number")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.appCaptionSemibold)
                 .foregroundColor(.textSecondary)
 
             HStack(spacing: 0) {
                 Text("🇱🇰 +94")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.appBodyMedium)
                     .foregroundColor(.textPrimary)
                     .padding(.horizontal, 14)
-                    .frame(height: 52)
+                    .frame(minHeight: 52)
                     .background(Color.cardBackground)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .accessibilityHidden(true)
 
                 Rectangle()
                     .fill(Color.divider)
                     .frame(width: 1, height: 26)
+                    .accessibilityHidden(true)
 
                 TextField("7X XXX XXXX", text: $loginViewModel.phoneNumber)
                     .keyboardType(.numberPad)
-                    .font(.system(size: 16))
+                    .font(.appBodyMedium)
                     .foregroundColor(.textPrimary)
                     .padding(.horizontal, 14)
-                    .frame(height: 52)
+                    .frame(minHeight: 52)
                     .frame(maxWidth: .infinity)
+                    .focused($isPhoneFieldFocused)
+                    .accessibilityLabel("Mobile number")
+                    .accessibilityHint("Enter your Sri Lanka mobile number without the leading zero")
             }
             .background(Color.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 14))
@@ -116,8 +123,9 @@ struct LoginView: View {
 
             if !loginViewModel.phoneNumber.isEmpty && !loginViewModel.isPhoneNumberValid {
                 Text("Please enter a valid phone number")
-                    .font(.system(size: 12))
+                    .font(.appCaption)
                     .foregroundColor(.statusDanger)
+                    .accessibilityLabel("Error: Please enter a valid phone number")
             }
         }
     }
@@ -131,12 +139,12 @@ struct LoginView: View {
                     ProgressView().tint(.white)
                 } else {
                     Text("Send OTP")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.appBodySemibold)
                         .foregroundColor(.white)
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 54)
+            .frame(minHeight: 54)
             .background(
                 loginViewModel.canSendOTP
                     ? Color.brandSecondary
@@ -149,18 +157,21 @@ struct LoginView: View {
             return false
         }())
         .padding(.top, 4)
+        .accessibilityLabel("Send OTP")
+        .accessibilityHint(loginViewModel.canSendOTP ? "Sends a one-time password to your mobile number" : "Enter a valid mobile number first")
     }
 
     private var biometricDividerRow: some View {
         HStack(spacing: 12) {
             Rectangle().fill(Color.divider).frame(height: 1)
             Text("or")
-                .font(.system(size: 13, weight: .regular))
+                .font(.appFootnote)
                 .foregroundColor(.textSecondary)
                 .fixedSize()
             Rectangle().fill(Color.divider).frame(height: 1)
         }
         .padding(.vertical, 4)
+        .accessibilityHidden(true)
     }
 
     private var biometricLoginButton: some View {
@@ -185,52 +196,28 @@ struct LoginView: View {
             )
         }
         .disabled(isBiometricAuthenticationInProgress)
-    }
-
-    private var dividerRow: some View {
-        HStack(spacing: 12) {
-            Rectangle().fill(Color.divider).frame(height: 1)
-            Text("or sign in with")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundColor(.textSecondary)
-                .fixedSize()
-            Rectangle().fill(Color.divider).frame(height: 1)
-        }
-        .padding(.vertical, 4)
-    }
-
-    private var socialRow: some View {
-        HStack(spacing: 20) {
-            Button {
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(Color.cardBackground)
-                        .frame(width: 56, height: 56)
-                        .overlay(Circle().stroke(Color.divider, lineWidth: 1.5))
-                    Image(systemName: "apple.logo")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundColor(.textPrimary)
-                }
-            }
-        }
+        .accessibilityLabel("Sign in with \(BiometricService.shared.biometricTypeDisplayName)")
+        .accessibilityHint("Authenticates using your device biometrics")
+        .accessibilityAddTraits(.isButton)
     }
 
     private var driverRegisterRow: some View {
         NavigationStack{
             VStack(spacing: 4) {
                 Text("Would you like to onboard as a driver?")
-                    .font(.system(size: 13, weight: .regular))
+                    .font(.appFootnote)
                     .foregroundColor(.textSecondary)
                 
                 NavigationLink {
                     DriverPersonalInfoView()
                 } label: {
                     Text("Register now")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.appCalloutSemibold)
                         .foregroundColor(.textPrimary)
                         .underline()
                 }
+                .accessibilityLabel("Register now as a driver")
+                .accessibilityHint("Opens the driver onboarding form")
             }
             .padding(.top, 8)
         }

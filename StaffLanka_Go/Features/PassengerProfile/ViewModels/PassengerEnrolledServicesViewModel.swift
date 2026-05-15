@@ -38,6 +38,7 @@ struct EnrolledService: Identifiable {
     let monthlyFee: Double
     var isActive: Bool
     var cancelledDate: Date? = nil
+    var activeDays: [String] = []
 }
 
 @MainActor
@@ -250,7 +251,8 @@ final class PassengerEnrolledServicesViewModel: ObservableObject {
             session: sessionType,
             morning: (sessionType == .both || sessionType == .morning) ? morningInfo : nil,
             evening: (sessionType == .both || sessionType == .evening) ? eveningInfo : nil,
-            monthlyFee: sessionFee, isActive: req.status == "accepted"
+            monthlyFee: sessionFee, isActive: req.status == "accepted",
+            activeDays: Set(route.scheduleEntries.flatMap { $0.activeDays }).sorted()
         )
     }
 }

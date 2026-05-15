@@ -47,6 +47,7 @@ struct RouteScheduleData: Codable {
     }
 }
 
+//collection name in firebase is "routes"
 struct RouteModel: Codable, Identifiable {
     @DocumentID var id: String?
     var ownerDriverId: String

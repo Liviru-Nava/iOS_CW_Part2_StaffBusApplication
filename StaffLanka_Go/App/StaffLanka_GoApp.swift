@@ -8,6 +8,7 @@
 import SwiftUI
 import Firebase
 import FirebaseAuth
+import FirebaseFirestore
 import CoreData
 import UserNotifications
 
@@ -75,6 +76,51 @@ struct StaffLanka_GoApp: App {
             ContentView()
                 .environmentObject(authManager)
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                .task {
+                    await refreshExpiredCalendarEventsIfNeeded()
+                }
+        }
+    }
+
+    // Checks whether the stored calendar events for the signed-in user's routes have expired
+    private func refreshExpiredCalendarEventsIfNeeded() async {
+        guard let userId = FirebaseAuth.Auth.auth().currentUser?.uid else { return }
+
+        do {
+            // Fetch accepted join requests for this user to find their enrolled routes
+            let snapshot = try await FirebaseFirestore.Firestore.firestore()
+                .collection("joinRequests")
+                .whereField("passengerId", isEqualTo: userId)
+                .whereField("status", isEqualTo: "accepted")
+                .getDocuments()
+
+            for document in snapshot.documents {
+                let data = document.data()
+                guard let routeId = data["routeId"] as? String,
+                      let sessionLabel = data["session"] as? String,
+                      let pickupStop = data["pickupStop"] as? String else { continue }
+
+                guard let route = try? await RouteService.shared.fetchRoute(routeId: routeId) else { continue }
+
+                let morningDeparture = route.scheduleEntries.first?.scheduledDepartureTime ?? Date()
+                let eveningDeparture = route.scheduleEntries.count > 1
+                    ? route.scheduleEntries[1].scheduledDepartureTime
+                    : Date()
+                let activeDays = route.scheduleEntries.first?.activeDays ?? []
+                let routeDisplayName = "\(route.startName ?? route.startLocation.locationName) - \(route.endName ?? route.endLocation.locationName)"
+
+                await EventKitManager.shared.rescheduleEventsIfMonthExpired(
+                    routeId: routeId,
+                    routeDisplayName: routeDisplayName,
+                    passengerPickupStopName: pickupStop,
+                    sessionLabel: sessionLabel,
+                    morningDepartureTime: morningDeparture,
+                    eveningDepartureTime: eveningDeparture,
+                    routeActiveDays: activeDays
+                )
+            }
+        } catch {
+            print("[StaffLanka_GoApp] Calendar refresh check failed: \(error.localizedDescription)")
         }
     }
 }

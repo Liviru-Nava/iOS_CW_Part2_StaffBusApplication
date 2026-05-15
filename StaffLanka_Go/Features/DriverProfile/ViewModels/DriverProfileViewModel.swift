@@ -293,7 +293,6 @@ final class DriverProfileViewModel: ObservableObject {
     }
 
     // Core Data — Load cached profile from Core Data before Firestore fetch completes
-
     func loadFromCoreData() {
         guard let userId = Auth.auth().currentUser?.uid else { return }
         guard let cachedDriverProfile = CoreDataManager.shared.fetchDriverProfile(userId: userId) else { return }
@@ -441,7 +440,6 @@ final class DriverProfileViewModel: ObservableObject {
     }
 
     // Computed Properties
-
     var driverProfileInitialsText: String {
         let nameParts = driverProfileInformationValues.driverFullName.split(separator: " ")
         if nameParts.count >= 2 {
@@ -451,7 +449,6 @@ final class DriverProfileViewModel: ObservableObject {
     }
 
     // Profile Editing
-
     func openDriverProfileEditMode() {
         editingDriverFullName      = driverProfileInformationValues.driverFullName
         editingDriverPhoneNumber   = driverProfileInformationValues.driverPhoneNumber
@@ -908,11 +905,67 @@ final class DriverProfileViewModel: ObservableObject {
     }
 
     // Passenger Join Request Actions
-
     func acceptPassengerJoinRequest(requestIdentifier: String) {
+        // Capture whether this is the first accepted passenger before the list updates
+        let isFirstPassengerBeingAccepted = activePassengersList.isEmpty
+
         Task {
             do {
                 try await JoinRequestService.shared.updateStatus(requestId: requestIdentifier, status: "accepted")
+                print("[DriverProfileVM] Request \(requestIdentifier) accepted")
+
+                // Fetch the accepted request document to get session, stops, and routeId
+                let requestSnapshot = try await Firestore.firestore()
+                    .collection("joinRequests")
+                    .document(requestIdentifier)
+                    .getDocument()
+
+                guard let requestData = requestSnapshot.data() else { return }
+                let acceptedRouteId   = requestData["routeId"]     as? String ?? ""
+                let sessionLabel      = requestData["session"]     as? String ?? "Both"
+                let pickupStopName    = requestData["pickupStop"]  as? String ?? ""
+
+                guard !acceptedRouteId.isEmpty else { return }
+                let route = try await RouteService.shared.fetchRoute(routeId: acceptedRouteId)
+
+                let morningDeparture = route.scheduleEntries.first?.scheduledDepartureTime ?? Date()
+                let eveningDeparture = route.scheduleEntries.count > 1
+                    ? route.scheduleEntries[1].scheduledDepartureTime
+                    : Date()
+                let activeDays = route.scheduleEntries.first?.activeDays ?? []
+                let routeDisplayName = "\(route.startName ?? route.startLocation.locationName) - \(route.endName ?? route.endLocation.locationName)"
+
+                // Schedule calendar events for the passenger that was just accepted
+                await EventKitManager.shared.schedulePassengerEventsOnAcceptance(
+                    routeId: acceptedRouteId,
+                    routeDisplayName: routeDisplayName,
+                    passengerPickupStopName: pickupStopName,
+                    sessionLabel: sessionLabel,
+                    morningDepartureTime: morningDeparture,
+                    eveningDepartureTime: eveningDeparture,
+                    routeActiveDays: activeDays
+                )
+
+                // Schedule the driver's own calendar events when the first passenger is accepted
+                if isFirstPassengerBeingAccepted {
+                    let morningArrival = route.scheduleEntries.first?.scheduledArrivalTime ?? morningDeparture
+                    let eveningArrival = route.scheduleEntries.count > 1
+                        ? route.scheduleEntries[1].scheduledArrivalTime ?? eveningDeparture
+                        : eveningDeparture
+
+                    await EventKitManager.shared.scheduleDriverEventsOnFirstPassengerAccepted(
+                        routeId: acceptedRouteId,
+                        routeStartLocationName: route.startName ?? route.startLocation.locationName,
+                        routeEndLocationName: route.endName ?? route.endLocation.locationName,
+                        morningDepartureTime: morningDeparture,
+                        morningEstimatedArrivalTime: morningArrival,
+                        eveningDepartureTime: eveningDeparture,
+                        eveningEstimatedArrivalTime: eveningArrival,
+                        routeActiveDays: activeDays
+                    )
+                    print("[DriverProfileVM] Driver calendar events scheduled on first passenger acceptance")
+                }
+
             } catch {
                 print("[DriverProfileVM] Accept request failed: \(error.localizedDescription)")
             }
@@ -1006,7 +1059,6 @@ final class DriverProfileViewModel: ObservableObject {
     }
 
     // Sign Out
-
     func signOut() {
         if let userId = Auth.auth().currentUser?.uid {
             CoreDataManager.shared.deleteAllLocalData(userId: userId)
@@ -1015,7 +1067,6 @@ final class DriverProfileViewModel: ObservableObject {
     }
 
     // Delete Account
-
     func deleteAccount() {
         isDeletingAccount = true
         Task {

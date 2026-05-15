@@ -441,7 +441,9 @@ final class DriverRouteScheduleViewModel: ObservableObject {
                 licenseNumber: upstreamPersonalInfoViewModel.licenseNumber,
                 busInformation: busInfoForDriverRecord,
                 assignedRouteId: createdRouteId,
-                driverCreatedAt: Date()
+                driverCreatedAt: Date(),
+                serviceStatus: "active",
+                isAcceptingRequests: true
             )
 
             try await DriverService.shared.createDriver(driverRecord: newDriverRecord)
@@ -454,9 +456,7 @@ final class DriverRouteScheduleViewModel: ObservableObject {
 
             await AuthManager.shared.refreshUserRoleFromFirestore(userId: authenticatedUserId)
 
-            // Schedule recurring calendar reminders for both operating sessions
-            await scheduleDriverCalendarRemindersAfterOnboarding()
-
+            // Driver calendar events are scheduled when the first passenger is accepted, not at onboarding
             isSubmitting = false
             onboardingComplete = true
 
@@ -464,22 +464,5 @@ final class DriverRouteScheduleViewModel: ObservableObject {
             submissionErrorMessage = error.localizedDescription
             isSubmitting = false
         }
-    }
-
-    // Creates recurring calendar events for the driver's morning and evening operating schedule
-    private func scheduleDriverCalendarRemindersAfterOnboarding() async {
-        let activeDayStrings = selectedDays.map { $0.rawValue }
-
-        await EventKitManager.shared.scheduleDriverOperatingDayReminders(
-            routeStartLocationName: startingPoint,
-            routeEndLocationName: endingPoint,
-            morningDepartureTime: morningTrip.departureTime,
-            morningEstimatedArrivalTime: morningTrip.estimatedArrivalTime,
-            eveningDepartureTime: eveningTrip.departureTime,
-            eveningEstimatedArrivalTime: eveningTrip.estimatedArrivalTime,
-            routeActiveDays: activeDayStrings
-        )
-
-        print("[DriverRouteScheduleViewModel] Driver calendar reminders scheduled for route: \(startingPoint) → \(endingPoint)")
     }
 }

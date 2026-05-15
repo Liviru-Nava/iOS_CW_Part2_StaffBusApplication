@@ -10,12 +10,14 @@ import SwiftUI
 struct DriverEarningsView: View {
 
     @StateObject private var earningsViewModel = DriverEarningsViewModel()
+    // Local Date binding for the DatePicker — only month and year matter
+    @State private var selectedPickerDate: Date = Date()
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
                 totalEarningsSummaryCard.padding(.top, 8)
-                monthChipFilterBar
+                monthYearPickerSection
                 if earningsViewModel.numberOfUnpaidPassengers > 0 {
                     unpaidPassengersAlertBanner
                 }
@@ -27,7 +29,11 @@ struct DriverEarningsView: View {
         .background(Color.appBackground)
         .navigationTitle("Earnings")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { earningsViewModel.startListening() }
+        .onAppear {
+            earningsViewModel.startListening()
+            // Sync the picker to the currently selected month on appear
+            selectedPickerDate = earningsViewModel.dateFromMonthYearString(earningsViewModel.selectedMonthYear) ?? Date()
+        }
         .overlay {
             if earningsViewModel.isLoading {
                 VStack(spacing: 12) {
@@ -40,15 +46,14 @@ struct DriverEarningsView: View {
         }
     }
 
-    // Top summary card showing selected month totals
     private var totalEarningsSummaryCard: some View {
         ZStack(alignment: .bottomLeading) {
             LinearGradient.brand.clipShape(RoundedRectangle(cornerRadius: 20))
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Total Earnings").font(.system(size: 11, weight: .medium)).foregroundStyle(Color.white.opacity(0.55))
-                        Text(currentMonthDisplayLabel).font(.system(size: 16, weight: .bold)).foregroundStyle(Color.white)
+                        Text("Total Earnings").font(.appCaption2).foregroundStyle(Color.white.opacity(0.55))
+                        Text(currentMonthDisplayLabel).font(.appCalloutSemibold).foregroundStyle(Color.white)
                     }
                     Spacer()
                     ZStack {
@@ -58,9 +63,9 @@ struct DriverEarningsView: View {
                 }
 
                 HStack(alignment: .lastTextBaseline, spacing: 6) {
-                    Text("Rs.").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.white.opacity(0.70))
+                    Text("Rs.").font(.appCalloutSemibold).foregroundStyle(Color.white.opacity(0.70))
                     Text(earningsViewModel.totalEarningsForSelectedMonth.formattedWithSeparator)
-                        .font(.system(size: 28, weight: .bold, design: .rounded)).foregroundStyle(Color.white)
+                        .font(.appLargeTitle).foregroundStyle(Color.white)
                 }
 
                 Rectangle().fill(Color.white.opacity(0.14)).frame(height: 1)
@@ -81,50 +86,61 @@ struct DriverEarningsView: View {
         }
     }
 
-    // Horizontally scrollable month chip bar — replaces the Picker dropdown
-    // Shows the last 12 months as tappable chips with the current month highlighted
-    private var monthChipFilterBar: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    // DatePicker allowing the user to select month and year only
+    // Data is scoped to the selected month and doesnt show other month data
+    private var monthYearPickerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Filter by Month")
-                .font(.system(size: 12, weight: .semibold)).foregroundColor(.textTertiary).textCase(.uppercase).tracking(0.5)
+                .font(.appCaptionSemibold)
+                .foregroundColor(.textTertiary)
+                .textCase(.uppercase)
+                .tracking(0.5)
+                .accessibilityAddTraits(.isHeader)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(earningsViewModel.availableMonthChips) { chip in
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                earningsViewModel.selectMonth(chip.monthYear)
-                            }
-                        } label: {
-                            VStack(spacing: 2) {
-                                Text(chip.displayLabel)
-                                    .font(.system(size: 13, weight: chip.monthYear == earningsViewModel.selectedMonthYear ? .bold : .medium))
-                                    .foregroundColor(chip.monthYear == earningsViewModel.selectedMonthYear ? .white : .textPrimary)
-                                if chip.isCurrentMonth {
-                                    Circle().fill(chip.monthYear == earningsViewModel.selectedMonthYear ? Color.white : Color.brandAccent).frame(width: 4, height: 4)
-                                }
-                            }
-                            .padding(.horizontal, 16).padding(.vertical, 10)
-                            .background(chip.monthYear == earningsViewModel.selectedMonthYear ? Color.brandAccent : Color.cardBackground)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(
-                                chip.isCurrentMonth && chip.monthYear != earningsViewModel.selectedMonthYear
-                                    ? Color.brandAccent.opacity(0.5) : Color.divider,
-                                lineWidth: 1
-                            ))
-                        }
-                        .buttonStyle(.plain)
-                        .animation(.easeInOut(duration: 0.15), value: earningsViewModel.selectedMonthYear)
+            HStack(spacing: 12) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 16))
+                    .foregroundStyle(Color.brandAccent)
+
+                DatePicker(
+                    "",
+                    selection: $selectedPickerDate,
+                    in: ...Date(),
+                    displayedComponents: [.date]
+                )
+                .datePickerStyle(.compact)
+                .labelsHidden()
+                .tint(Color.brandAccent)
+                .onChange(of: selectedPickerDate) { _, newDate in
+                    let newMonthYear = earningsViewModel.monthYearStringFromDate(newDate)
+                    if newMonthYear != earningsViewModel.selectedMonthYear {
+                        earningsViewModel.selectMonth(newMonthYear)
                     }
                 }
-                .padding(.horizontal, 2).padding(.vertical, 2)
+
+                Spacer()
+
+                // Shows which month is currently displayed
+                Text(currentMonthDisplayLabel)
+                    .font(.appFootnoteSemibold)
+                    .foregroundStyle(Color.brandAccent)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.brandAccent.opacity(0.10))
+                    .clipShape(Capsule())
+                    .accessibilityLabel("Showing earnings for \(currentMonthDisplayLabel)")
             }
+            .padding(14)
+            .background(Color.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.divider, lineWidth: 1))
         }
     }
 
     private var currentMonthDisplayLabel: String {
-        earningsViewModel.availableMonthChips.first { $0.monthYear == earningsViewModel.selectedMonthYear }?.displayLabel
-            ?? earningsViewModel.selectedMonthYear
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: selectedPickerDate)
     }
 
     private var thinVerticalDivider: some View {
@@ -133,19 +149,24 @@ struct DriverEarningsView: View {
 
     private func compactStatCell(labelText: String, valueText: String, valueColor: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(labelText).font(.system(size: 10)).foregroundStyle(Color.white.opacity(0.55))
-            Text(valueText).font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(valueColor).lineLimit(1).minimumScaleFactor(0.75)
+            Text(labelText).font(.appCaption2).foregroundStyle(Color.white.opacity(0.55))
+            Text(valueText).font(.appCaptionSemibold).foregroundStyle(valueColor).lineLimit(1).minimumScaleFactor(0.75)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(labelText): \(valueText)")
     }
 
     private func compactPassengerCell(labelText: String, count: Int, countColor: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(labelText).font(.system(size: 10)).foregroundStyle(Color.white.opacity(0.55))
+            Text(labelText).font(.appCaption2).foregroundStyle(Color.white.opacity(0.55))
             HStack(spacing: 3) {
                 Image(systemName: "person.fill").font(.system(size: 9)).foregroundStyle(countColor.opacity(0.75))
-                Text("\(count)").font(.system(size: 13, weight: .bold, design: .rounded)).foregroundStyle(countColor)
+                    .accessibilityHidden(true)
+                Text("\(count)").font(.appFootnoteSemibold).foregroundStyle(countColor)
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(labelText): \(count)")
     }
 
     private var unpaidPassengersAlertBanner: some View {
@@ -156,8 +177,8 @@ struct DriverEarningsView: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(earningsViewModel.numberOfUnpaidPassengers) passenger\(earningsViewModel.numberOfUnpaidPassengers == 1 ? "" : "s") have not paid yet")
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.textPrimary)
-                Text("See the list below").font(.system(size: 12)).foregroundStyle(Color.textSecondary)
+                    .font(.appCalloutSemibold).foregroundStyle(Color.textPrimary)
+                Text("See the list below").font(.appCaption).foregroundStyle(Color.textSecondary)
             }
             Spacer()
         }
@@ -196,7 +217,6 @@ struct DriverEarningsView: View {
         }
     }
 
-    // Full-detail passenger row: name, phone, pickup → drop-off, session, fee, paid/pending badge
     private func passengerPaymentRow(record: DriverEarningsViewModel.PassengerPaymentRecord) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 14) {
@@ -205,8 +225,8 @@ struct DriverEarningsView: View {
                     Text(String(record.passengerFullName.prefix(1))).font(.system(size: 17, weight: .bold)).foregroundStyle(Color.brandAccent)
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(record.passengerFullName).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.textPrimary)
-                    Text(record.passengerPhoneNumber).font(.system(size: 12)).foregroundStyle(Color.textSecondary)
+                    Text(record.passengerFullName).font(.appCalloutSemibold).foregroundStyle(Color.textPrimary)
+                    Text(record.passengerPhoneNumber).font(.appCaption).foregroundStyle(Color.textSecondary)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
@@ -215,7 +235,6 @@ struct DriverEarningsView: View {
                 }
             }
 
-            // Route detail
             VStack(spacing: 4) {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.up.circle.fill").font(.system(size: 11)).foregroundStyle(Color.statusActive)
@@ -232,7 +251,6 @@ struct DriverEarningsView: View {
             }
             .padding(.leading, 58)
 
-            // Session badge
             sessionTypeLabel(serviceType: record.routeServiceType).padding(.leading, 58)
         }
         .padding(14)
