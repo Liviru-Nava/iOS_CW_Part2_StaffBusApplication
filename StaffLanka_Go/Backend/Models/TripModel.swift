@@ -9,8 +9,8 @@ import Foundation
 import FirebaseFirestore
 import CoreLocation
 
-// Firestore document in the `trips` collection.
-// Created by the driver when they tap Start Trip; updated throughout the trip.
+// Firestore document in the "trips" collection.
+// Created by the driver when they tap Start Trip updated throughout the trip.
 struct TripModel: Codable, Identifiable {
     @DocumentID var id: String?
     var routeId: String

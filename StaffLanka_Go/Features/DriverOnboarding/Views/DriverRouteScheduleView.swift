@@ -20,7 +20,7 @@ struct DriverRouteScheduleView: View {
                     headerSection
                     routeDetails
                     stopsSection
-                    fitRouteButton_afterStops
+                    //fitRouteButton_afterStops
                     scheduleSection
                     pricingSection
                     submitButton
@@ -49,6 +49,7 @@ struct DriverRouteScheduleView: View {
         }
     }
 
+    //header section
     private var headerSection: some View {
         VStack(spacing: 12) {
             ZStack {

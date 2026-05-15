@@ -109,7 +109,7 @@ struct PassengerProfileView: View {
                             .fill(LinearGradient.brand)
                             .frame(width: 64, height: 64)
                         Text(profileViewModel.initials)
-                            .font(.system(size: 22, weight: .bold))
+                            .font(.appTitle3)
                             .foregroundColor(.white)
                     }
                 }
@@ -121,13 +121,13 @@ struct PassengerProfileView: View {
                             .padding(.vertical, 4)
                     } else {
                         Text(profileViewModel.user.name.isEmpty ? "Loading..." : profileViewModel.user.name)
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.appHeadline)
                             .foregroundColor(.textPrimary)
                         Text(profileViewModel.user.phone.isEmpty ? "" : profileViewModel.user.phone)
-                            .font(.system(size: 13))
+                            .font(.appFootnote)
                             .foregroundColor(.textSecondary)
                         Text(profileViewModel.user.role)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.appCaption2Semibold)
                             .foregroundColor(.brandAccent)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
@@ -215,7 +215,7 @@ struct PassengerProfileView: View {
         HStack(spacing: 12) {
             settingsIcon(systemName: "faceid", color: Color.brandAccent)
             Text("\(BiometricService.shared.biometricTypeDisplayName) Sign-In")
-                .font(.system(size: 15))
+                .font(.appBody)
                 .foregroundColor(.textPrimary)
             Spacer()
             Toggle("", isOn: Binding(
@@ -237,6 +237,8 @@ struct PassengerProfileView: View {
             ))
             .labelsHidden()
             .tint(Color.brandAccent)
+            .accessibilityLabel("\(BiometricService.shared.biometricTypeDisplayName) Sign-In")
+            .accessibilityHint("Toggle to enable or disable biometric authentication")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 13)
@@ -245,20 +247,22 @@ struct PassengerProfileView: View {
 
     private var versionFooter: some View {
         Text("StaffLanka Go  v1.0.0")
-            .font(.system(size: 12))
+            .font(.appCaption)
             .foregroundColor(.textTertiary)
             .frame(maxWidth: .infinity)
             .padding(.top, 4)
+            .accessibilityLabel("App version 1.0.0")
     }
 
     private func profileSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.appCaptionSemibold)
                 .foregroundColor(.textTertiary)
                 .textCase(.uppercase)
                 .tracking(0.5)
                 .padding(.horizontal, 4)
+                .accessibilityAddTraits(.isHeader)
 
             VStack(spacing: 0) {
                 content()
@@ -276,12 +280,13 @@ struct PassengerProfileView: View {
         HStack(spacing: 12) {
             settingsIcon(systemName: icon, color: iconColor)
             Text(title)
-                .font(.system(size: 15))
+                .font(.appBody)
                 .foregroundColor(titleColor)
             Spacer()
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.textTertiary)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 13)
@@ -300,13 +305,14 @@ struct PassengerProfileView: View {
             HStack(spacing: 12) {
                 settingsIcon(systemName: icon, color: iconColor)
                 Text(title)
-                    .font(.system(size: 15))
+                    .font(.appBody)
                     .foregroundColor(titleColor)
                 Spacer()
                 if showChevron {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.textTertiary)
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.horizontal, 16)
@@ -458,7 +464,7 @@ struct PassengerEditProfileSheet: View {
                 .frame(width: 88, height: 88)
                 .overlay(
                     Text(profileViewModel.initials)
-                        .font(.system(size: 30, weight: .bold))
+                        .font(.appTitle)
                         .foregroundColor(.white)
                 )
         }
@@ -470,8 +476,9 @@ struct PassengerEditProfileSheet: View {
                 .font(.system(size: 13))
                 .foregroundColor(.brandAccent)
                 .frame(width: 18)
+                .accessibilityHidden(true)
             TextField(fieldLabel, text: boundValue)
-                .font(.system(size: 15))
+                .font(.appBody)
                 .foregroundColor(.textPrimary)
                 .tint(.brandAccent)
                 .keyboardType(keyboardType)

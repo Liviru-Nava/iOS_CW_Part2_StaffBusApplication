@@ -55,13 +55,15 @@ struct PassengerTripHistoryView: View {
     private func summaryCell(value: String, label: String) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .font(.appLargeTitle)
                 .foregroundColor(.white)
             Text(label)
-                .font(.system(size: 12))
+                .font(.appCaption)
                 .foregroundColor(.white.opacity(0.65))
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value)")
     }
 
     private var bannerDivider: some View {
@@ -78,7 +80,7 @@ struct PassengerTripHistoryView: View {
                         tripHistoryViewModel.selectedDateFilter = filter
                     } label: {
                         Text(filter.rawValue)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.appFootnoteMedium)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 7)
                             .background(
@@ -102,6 +104,8 @@ struct PassengerTripHistoryView: View {
                             )
                     }
                     .animation(.easeInOut(duration: 0.15), value: tripHistoryViewModel.selectedDateFilter)
+                    .accessibilityLabel(filter.rawValue)
+                    .accessibilityAddTraits(tripHistoryViewModel.selectedDateFilter == filter ? [.isSelected] : [])
                 }
             }
             .padding(.horizontal, 16)
@@ -113,17 +117,18 @@ struct PassengerTripHistoryView: View {
             ForEach(tripHistoryViewModel.groupedRecords, id: \.0) { sectionLabel, dayRecords in
                 VStack(alignment: .leading, spacing: 10) {
                     Text(sectionLabel)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.appCaption2Semibold)
                         .foregroundColor(.textTertiary)
                         .textCase(.uppercase)
                         .tracking(0.5)
                         .padding(.horizontal, 16)
+                        .accessibilityAddTraits(.isHeader)
 
                     ForEach(dayRecords) { record in
                         TripDayCard(record: record)
-                            .onTapGesture {
-                                tripHistoryViewModel.selectedRecord = record
-                            }
+                            .onTapGesture { tripHistoryViewModel.selectedRecord = record }
+                            .accessibilityLabel("Trip on \(record.date.formatted(date: .long, time: .omitted)): \(record.routeName). Tap for details")
+                            .accessibilityAddTraits(.isButton)
                     }
                 }
             }
@@ -142,10 +147,10 @@ struct PassengerTripHistoryView: View {
                     .foregroundColor(Color.brandAccent)
             }
             Text("No Trips Found")
-                .font(.system(size: 20, weight: .bold))
+                .font(.appTitle)
                 .foregroundColor(.textPrimary)
             Text("No trips recorded for the selected date range.")
-                .font(.system(size: 14))
+                .font(.appBody)
                 .foregroundColor(.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
@@ -216,12 +221,12 @@ struct TripDayCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(session.session == .morning ? "Morning" : "Evening")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.appCalloutSemibold)
                         .foregroundColor(attended ? .textPrimary : .textTertiary)
 
                     if !attended {
                         Text("Skipped")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.appCaption2Semibold)
                             .foregroundColor(.statusInactive)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -291,8 +296,10 @@ struct TripDayDetailSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.appCalloutSemibold)
                         .foregroundColor(Color.brandAccent)
+                        .accessibilityLabel("Done")
+                        .accessibilityHint("Closes this detail sheet")
                 }
             }
         }
@@ -309,10 +316,10 @@ struct TripDayDetailSheet: View {
                     .foregroundColor(Color.brandAccent)
             }
             Text(record.routeName)
-                .font(.system(size: 17, weight: .bold))
+                .font(.appTitle3)
                 .foregroundColor(.textPrimary)
             Text(record.date.formatted(date: .long, time: .omitted))
-                .font(.system(size: 13))
+                .font(.appFootnote)
                 .foregroundColor(.textSecondary)
         }
         .frame(maxWidth: .infinity)
@@ -413,15 +420,17 @@ struct TripDayDetailSheet: View {
     private func detailRow(label: String, value: String) -> some View {
         HStack {
             Text(label)
-                .font(.system(size: 14))
+                .font(.appCallout)
                 .foregroundColor(.textSecondary)
             Spacer()
             Text(value)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.appCalloutSemibold)
                 .foregroundColor(.textPrimary)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value)")
     }
 }
 

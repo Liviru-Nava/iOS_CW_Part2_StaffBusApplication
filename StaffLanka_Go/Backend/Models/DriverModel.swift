@@ -16,6 +16,7 @@ struct DriverBusInfo: Codable {
     var passengerCapacity: Int
 }
  
+//collection name in firebase is "drivers"
 struct DriverModel: Codable, Identifiable {
     @DocumentID var id: String?
     var fullName: String

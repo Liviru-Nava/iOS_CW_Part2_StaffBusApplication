@@ -46,6 +46,7 @@ struct OnboardingView: View {
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(.easeInOut, value: currentPageIndex)
+                .accessibilityElement(children: .contain)
 
                 bottomControlsSection
                     .padding(.horizontal, 28)
@@ -69,25 +70,28 @@ struct OnboardingView: View {
                     .font(.system(size: 56, weight: .semibold))
                     .foregroundColor(page.accentColor)
             }
+            .accessibilityHidden(true)
 
             VStack(spacing: 16) {
                 Text(page.headline)
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .font(.appLargeTitle)
                     .foregroundColor(.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text(page.description)
-                    .font(.system(size: 16, weight: .regular))
+                    .font(.appBody)
                     .foregroundColor(.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
                     .padding(.horizontal, 8)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
             Spacer()
         }
         .padding(.horizontal, 32)
+        .accessibilityLabel("\(page.headline). \(page.description)")
     }
 
     private var bottomControlsSection: some View {
@@ -100,9 +104,11 @@ struct OnboardingView: View {
                         authManager.markOnboardingComplete()
                     } label: {
                         Text("Skip")
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.appBodyMedium)
                             .foregroundColor(.textSecondary)
                     }
+                    .accessibilityLabel("Skip onboarding")
+                    .accessibilityHint("Goes directly to the app")
 
                     Spacer()
 
@@ -113,30 +119,34 @@ struct OnboardingView: View {
                     } label: {
                         HStack(spacing: 8) {
                             Text("Next")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.appBodySemibold)
                                 .foregroundColor(.white)
                             Image(systemName: "arrow.right")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.white)
                         }
                         .padding(.horizontal, 28)
-                        .frame(height: 50)
+                        .frame(minHeight: 50)
                         .background(Color.brandSecondary)
                         .clipShape(Capsule())
                     }
+                    .accessibilityLabel("Next")
+                    .accessibilityHint("Go to page \(currentPageIndex + 2) of \(onboardingPages.count)")
                 }
             } else {
                 Button {
                     authManager.markOnboardingComplete()
                 } label: {
                     Text("Get Started")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.appBodySemibold)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 54)
+                        .frame(minHeight: 54)
                         .background(LinearGradient.brand)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
+                .accessibilityLabel("Get started")
+                .accessibilityHint("Begins using StaffLanka Go")
             }
         }
     }
@@ -150,6 +160,8 @@ struct OnboardingView: View {
                     .animation(.spring(response: 0.35, dampingFraction: 0.7), value: currentPageIndex)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Page \(currentPageIndex + 1) of \(onboardingPages.count)")
     }
 }
 

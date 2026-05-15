@@ -143,7 +143,6 @@ extension PassengerRouteResult {
     }
 
     // Shared stop builder
-
     private static func buildStops(from route: RouteModel, routeId: String) -> [PassengerStop] {
         let startStop = PassengerStop(
             id: "start_\(routeId)",

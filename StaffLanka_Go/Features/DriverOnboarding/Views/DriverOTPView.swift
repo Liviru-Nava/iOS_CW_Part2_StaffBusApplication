@@ -23,7 +23,7 @@ struct DriverOTPView: View {
 
     var body: some View {
         ZStack {
-            // Background tap dismisses the number pad (consistent with login OTP screen).
+            // Background tap dismisses the number pad same with login OTP screen).
             Color.appBackground.ignoresSafeArea()
                 .onTapGesture {
                     inputFocused = false

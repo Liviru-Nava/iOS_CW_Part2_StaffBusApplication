@@ -59,7 +59,6 @@ final class JoinRequestService {
     }
 
     // Passenger: fetch accepted (enrolled) requests
-
     func fetchAcceptedRequests(passengerId: String) async throws -> [JoinRequestModel] {
         let snapshot = try await db.collection(collection)
             .whereField("passengerId", isEqualTo: passengerId)
@@ -75,7 +74,6 @@ final class JoinRequestService {
     }
 
     // Passenger: real-time listener for own requests (any status)
-
     func listenForPassengerRequests(
         passengerId: String,
         onChange: @escaping ([JoinRequestModel]) -> Void
@@ -101,7 +99,6 @@ final class JoinRequestService {
 
     // Passenger: cancel an entire enrollment (both sessions or a single-session enrollment)
     // Writes cancelledBy = "passenger" so the driver side can distinguish self-cancellations from driver removals
-
     func cancelEntireEnrollment(requestId: String) async throws {
         try await db.collection(collection).document(requestId).updateData([
             "status":      "cancelled",
@@ -115,7 +112,6 @@ final class JoinRequestService {
     // Instead of cancelling the whole document, this updates the session field to the remaining session
     // so the other session stays active and visible on the dashboard and enrolled services screen
     // The cancelledSession field records which session was removed for the past enrollments view
-
     func cancelSingleSessionFromBothEnrollment(requestId: String, remainingSessionLabel: String, cancelledSessionLabel: String) async throws {
         try await db.collection(collection).document(requestId).updateData([
             "session":          remainingSessionLabel,
@@ -128,7 +124,6 @@ final class JoinRequestService {
 
     // Driver: cancel an enrollment by removing a passenger from the route
     // Writes cancelledBy = "driver" so the driver side shows "Removed" rather than "Self-Removed"
-
     func cancelEnrollmentByDriver(requestId: String) async throws {
         try await db.collection(collection).document(requestId).updateData([
             "status":      "cancelled",
@@ -138,7 +133,7 @@ final class JoinRequestService {
         print(" [JoinRequestService] Enrollment \(requestId) cancelled by driver")
     }
 
-    // Legacy alias kept for backward compatibility — treated as a passenger-initiated cancel
+    // initiated by passenger
     func cancelEnrollment(requestId: String) async throws {
         try await cancelEntireEnrollment(requestId: requestId)
     }

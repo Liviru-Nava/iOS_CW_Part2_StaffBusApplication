@@ -91,7 +91,7 @@ struct PassengerCostTrackingView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(service.routeName).font(.system(size: 17, weight: .bold)).foregroundColor(.white).lineLimit(1)
+                        Text(service.routeName).font(.appCalloutSemibold).foregroundColor(.white).lineLimit(1)
                         sessionBadge(service.session, onDark: true)
                     }
                     Spacer()
@@ -146,7 +146,8 @@ struct PassengerCostTrackingView: View {
 
     private var filterBar: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Filter").font(.system(size: 12, weight: .semibold)).foregroundColor(.textTertiary).textCase(.uppercase).tracking(0.5).padding(.horizontal, 16)
+            Text("Filter").font(.appCaptionSemibold).foregroundColor(.textTertiary).textCase(.uppercase).tracking(0.5).padding(.horizontal, 16)
+                .accessibilityAddTraits(.isHeader)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     filterPill(label: "All", active: passengerCostTrackingViewModel.sessionFilter == nil && !passengerCostTrackingViewModel.showUnpaidOnly && !passengerCostTrackingViewModel.sortByAmount) {
@@ -178,7 +179,7 @@ struct PassengerCostTrackingView: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 if let icon { Image(systemName: icon).font(.system(size: 11, weight: .medium)) }
-                Text(label).font(.system(size: 13, weight: .medium))
+                Text(label).font(.appFootnoteMedium)
             }
             .padding(.horizontal, 12).padding(.vertical, 7)
             .background(active ? tint.opacity(0.14) : Color.cardBackground)
@@ -187,6 +188,8 @@ struct PassengerCostTrackingView: View {
             .overlay(Capsule().strokeBorder(active ? tint.opacity(0.45) : Color.divider, lineWidth: 1))
         }
         .animation(.easeInOut(duration: 0.15), value: active)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(active ? [.isSelected] : [])
     }
 
     private var monthlyHistorySection: some View {
@@ -214,12 +217,12 @@ struct PassengerCostTrackingView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(record.monthLabel).font(.system(size: 15, weight: .bold)).foregroundColor(.textPrimary)
+                    Text(record.monthLabel).font(.appCalloutSemibold).foregroundColor(.textPrimary)
                     sessionBadge(record.session, onDark: false)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text("Rs. \(Int(record.amount))").font(.system(size: 22, weight: .bold, design: .rounded)).foregroundColor(.textPrimary)
+                    Text("Rs. \(Int(record.amount))").font(.appTitle).foregroundColor(.textPrimary)
                     paidBadge
                 }
             }
@@ -275,7 +278,7 @@ struct PassengerCostTrackingView: View {
                         Circle().fill(Color.brandAccent.opacity(0.12)).frame(width: 64, height: 64)
                         Image(systemName: "creditcard.fill").font(.system(size: 26)).foregroundColor(Color.brandAccent)
                     }
-                    Text("Confirm Payment").font(.system(size: 20, weight: .bold)).foregroundColor(.textPrimary).padding(.top, 4)
+                    Text("Confirm Payment").font(.appTitle3).foregroundColor(.textPrimary).padding(.top, 4)
                 }
                 .padding(.bottom, 24)
 
@@ -294,13 +297,16 @@ struct PassengerCostTrackingView: View {
 
                 VStack(spacing: 12) {
                     Button { passengerCostTrackingViewModel.confirmPayment() } label: {
-                        Text("Confirm & Pay").font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
+                        Text("Confirm & Pay").font(.appBodySemibold).foregroundColor(.white)
                             .frame(maxWidth: .infinity).padding(.vertical, 15)
                             .background(LinearGradient.brand).clipShape(RoundedRectangle(cornerRadius: 14))
                     }
+                    .accessibilityLabel("Confirm and Pay")
+                    .accessibilityHint("Submits your payment for this month's bus service")
                     Button { passengerCostTrackingViewModel.dismissPaymentSheet() } label: {
-                        Text("Cancel").font(.system(size: 15, weight: .medium)).foregroundColor(.textSecondary)
+                        Text("Cancel").font(.appBodyMedium).foregroundColor(.textSecondary)
                     }
+                    .accessibilityLabel("Cancel")
                 }
                 .padding(.horizontal, 24).padding(.bottom, 32)
             }

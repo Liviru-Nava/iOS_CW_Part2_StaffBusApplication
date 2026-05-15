@@ -37,8 +37,6 @@ final class JoinRequestViewModel: ObservableObject {
     @Published var submitError: String? = nil
     @Published var showPickupPicker: Bool = false
     @Published var showDestinationPicker: Bool = false
-    @Published var calendarEventSchedulingCompleted: Bool = false
-
     // Route context
     let routeId: String
     let driverId: String
@@ -130,40 +128,12 @@ final class JoinRequestViewModel: ObservableObject {
                 let firestoreDocumentId = try await JoinRequestService.shared.submitRequest(joinRequestModelToSubmit)
                 print("[JoinRequestViewModel] Request submitted successfully, docId: \(firestoreDocumentId)")
                 withAnimation(.spring(response: 0.4)) { self.isSubmitted = true }
-                await scheduleCalendarRemindersForApprovedSessions()
+                // Calendar events are scheduled when the driver accepts the request, not on submission
             } catch {
                 print("[JoinRequestViewModel] Submit failed: \(error.localizedDescription)")
                 self.submitError = "Could not send request. Please try again."
             }
             self.isSubmitting = false
         }
-    }
-
-    private func scheduleCalendarRemindersForApprovedSessions() async {
-        switch selectedSession {
-        case .both:
-            await EventKitManager.shared.schedulePassengerTripReminders(
-                routeId: routeId, routeDisplayName: routeName,
-                passengerPickupStopName: selectedPickup,
-                morningDepartureTime: routeMorningDepartureTime,
-                eveningDepartureTime: routeEveningDepartureTime,
-                routeActiveDays: routeActiveDays
-            )
-        case .morning:
-            await schedulePassengerSingleSessionReminder(sessionLabel: "Morning", sessionDepartureTime: routeMorningDepartureTime, pickupStopName: selectedPickup)
-        case .evening:
-            await schedulePassengerSingleSessionReminder(sessionLabel: "Evening", sessionDepartureTime: routeEveningDepartureTime, pickupStopName: selectedPickup)
-        }
-        calendarEventSchedulingCompleted = true
-    }
-
-    private func schedulePassengerSingleSessionReminder(sessionLabel: String, sessionDepartureTime: Date, pickupStopName: String) async {
-        await EventKitManager.shared.schedulePassengerTripReminders(
-            routeId: routeId, routeDisplayName: routeName,
-            passengerPickupStopName: pickupStopName,
-            morningDepartureTime: sessionDepartureTime,
-            eveningDepartureTime: sessionDepartureTime,
-            routeActiveDays: routeActiveDays
-        )
     }
 }

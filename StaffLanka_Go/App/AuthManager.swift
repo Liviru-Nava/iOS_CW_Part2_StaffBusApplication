@@ -44,11 +44,13 @@ final class AuthManager: ObservableObject {
         UserDefaults.standard.string(forKey: storedPhoneNumberKey) ?? ""
     }
 
+    //Boolean to check if onboarding is seen
     var hasSeenOnboarding: Bool {
         get { UserDefaults.standard.bool(forKey: hasSeenOnboardingStorageKey) }
         set { UserDefaults.standard.set(newValue, forKey: hasSeenOnboardingStorageKey) }
     }
 
+    //Bool to accept terms
     var hasAcceptedTerms: Bool {
         get { UserDefaults.standard.bool(forKey: hasAcceptedTermsStorageKey) }
         set { UserDefaults.standard.set(newValue, forKey: hasAcceptedTermsStorageKey) }
@@ -59,6 +61,7 @@ final class AuthManager: ObservableObject {
         checkSession()
     }
 
+    // check the current session of the user
     func checkSession() {
         if !hasSeenOnboarding {
             authenticationState = .onboarding
@@ -82,11 +85,13 @@ final class AuthManager: ObservableObject {
         authenticationState = restoredRole == "driver" ? .driverAuthenticated : .authenticated
     }
 
+    //Making the onboarding complete - mark as true
     func markOnboardingComplete() {
         hasSeenOnboarding = true
         checkSession()
     }
 
+    //Accepting terms - mark as true
     func acceptTerms() {
         hasAcceptedTerms = true
         checkSession()

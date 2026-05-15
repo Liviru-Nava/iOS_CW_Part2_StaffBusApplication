@@ -67,8 +67,8 @@ final class PassengerDashboardViewModel: ObservableObject {
         return Calendar.current.isDateInToday(trip.tripDate)
     }
 
-    /// Returns true if today's weekday abbreviation (e.g. "Mon", "Tue") is in the
-    /// service's activeDays list.  When activeDays is empty we assume all days operate.
+    //Returns true if today's weekday abbreviation (e.g. "Mon", "Tue") is in the
+    //service's activeDays list.  When activeDays is empty we assume all days operate.
     private func todayIsOperatingDay(for service: EnrolledService?) -> Bool {
         guard let service = service, !service.activeDays.isEmpty else { return true }
         let weekdaySymbols = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]

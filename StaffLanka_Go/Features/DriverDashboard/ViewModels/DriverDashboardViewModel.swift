@@ -48,7 +48,13 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
         let passengersPickedUp: Int
     }
 
-    @Published var selectedSessionType: SessionType = .morning
+    @Published var selectedSessionType: SessionType = .morning {
+        didSet {
+            // Re-attach listeners with the correct date whenever the driver switches session tabs
+            guard !currentRouteId.isEmpty else { return }
+            reattachListenerForSession(selectedSessionType)
+        }
+    }
     @Published var morningTripState: TripState = .beforeTrip
     @Published var eveningTripState: TripState = .beforeTrip
     @Published var selectedSummaryViewType: SummaryViewType = .textSummary
@@ -61,7 +67,7 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
     @Published var morningSessionEstimatedEndTime: String = "Loading..."
     @Published var eveningSessionScheduledStartTime: String = "Loading..."
     @Published var eveningSessionEstimatedEndTime: String = "Loading..."
-    
+
     @Published var fetchedRouteData: RouteModel?
 
     @Published var morningAllStops: [RouteStopInfo] = []
@@ -72,24 +78,22 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
 
     @Published var morningSummaryStopRecords: [TripSummaryStopRecord] = []
     @Published var eveningSummaryStopRecords: [TripSummaryStopRecord] = []
-    
+
     @Published var morningEnrolledPassengers: [SimulationEnrolledPassenger] = []
     @Published var eveningEnrolledPassengers: [SimulationEnrolledPassenger] = []
 
     nonisolated(unsafe) private var _morningAttendanceListener: ListenerRegistration?
     nonisolated(unsafe) private var _eveningAttendanceListener: ListenerRegistration?
-    
+
     deinit {
         _morningAttendanceListener?.remove()
         _eveningAttendanceListener?.remove()
     }
 
-    // Core Location variables
     private var locationManager = CLLocationManager()
     @Published var currentUserLocation: CLLocationCoordinate2D?
     @Published var isNearEndingLocation: Bool = false
 
-    // Firestore trip tracking
     private(set) var currentRouteId: String = ""
     private var activeTripId: String? = nil
     private var locationUpdateTimer: Timer? = nil
@@ -101,7 +105,7 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
         self.locationManager.requestWhenInUseAuthorization()
         self.selectedSessionType = Calendar.current.component(.hour, from: Date()) < 12 ? .morning : .evening
     }
-    
+
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let latestLocation = locations.last else { return }
         Task { @MainActor in
@@ -109,13 +113,11 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
             self.checkProximityToEndingLocation(currentLocation: latestLocation)
         }
     }
-    
+
     private func checkProximityToEndingLocation(currentLocation: CLLocation) {
         guard let route = fetchedRouteData else { return }
         let endLocation = CLLocation(latitude: route.endLocation.latitude, longitude: route.endLocation.longitude)
-        let distance = currentLocation.distance(from: endLocation)
-        // Enable End trip if within 200 meters
-        self.isNearEndingLocation = distance <= 200
+        self.isNearEndingLocation = currentLocation.distance(from: endLocation) <= 200
     }
 
     var currentTripState: TripState {
@@ -143,31 +145,20 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
         selectedSessionType == .morning ? morningSummaryStopRecords : eveningSummaryStopRecords
     }
 
-    var currentStopName: String {
-        return "Unknown"
-    }
-
-    var nextStopName: String {
-        return "Unknown"
-    }
+    var currentStopName: String { "Unknown" }
+    var nextStopName: String { "Unknown" }
 
     var greetingText: String {
-        let currentHour = Calendar.current.component(.hour, from: Date())
-        switch currentHour {
+        switch Calendar.current.component(.hour, from: Date()) {
         case 0..<12: return "Good morning"
         case 12..<17: return "Good afternoon"
-        default: return "Good evening"
+        default:      return "Good evening"
         }
     }
 
-    // Morning: 00:00–11:59  |  Evening: 12:00–23:59
     var isStartTripButtonEnabled: Bool {
         let hour = Calendar.current.component(.hour, from: Date())
-        if selectedSessionType == .morning {
-            return hour >= 0 && hour < 12
-        } else {
-            return hour >= 12 && hour <= 23
-        }
+        return selectedSessionType == .morning ? (hour < 12) : (hour >= 12)
     }
 
     var sessionWindowHint: String {
@@ -192,7 +183,6 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
         }
         locationManager.startUpdatingLocation()
 
-        // Persist to Firestore
         let session = selectedSessionType == .morning ? "Morning" : "Evening"
         guard let userId = Auth.auth().currentUser?.uid, !currentRouteId.isEmpty else { return }
         Task {
@@ -227,7 +217,6 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
         locationManager.stopUpdatingLocation()
         stopLocationUpdateTimer()
 
-        // Persist to Firestore
         if let tripId = activeTripId {
             Task {
                 do {
@@ -247,8 +236,6 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
             isTripAlert: true
         )
     }
-
-    // Location update timer (pushes GPS to Firestore every 5 s)
 
     private func startLocationUpdateTimer() {
         locationUpdateTimer?.invalidate()
@@ -277,35 +264,43 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
             do {
                 let driver = try await DriverService.shared.fetchDriver(driverId: userId)
                 self.driverFullName = driver.fullName
-                
+
                 do {
                     let routeId = driver.assignedRouteId
-                self.currentRouteId = routeId
+                    self.currentRouteId = routeId
                     let route = try await RouteService.shared.fetchRoute(routeId: routeId)
                     self.fetchedRouteData = route
 
-                    // Fetch actual enrolled passenger count and join requests
                     let snapshot = try? await Firestore.firestore()
                         .collection("joinRequests")
                         .whereField("routeId", isEqualTo: routeId)
                         .whereField("status", isEqualTo: "accepted")
                         .getDocuments()
-                    
+
                     if let docs = snapshot?.documents {
                         let requests = docs.compactMap { try? $0.data(as: JoinRequestModel.self) }
                         self.totalEnrolledPassengerCount = requests.count
-                        print(" [DriverDashboardVM] Enrolled passengers: \(self.totalEnrolledPassengerCount)")
-                        
+
                         var mPass: [SimulationEnrolledPassenger] = []
                         var ePass: [SimulationEnrolledPassenger] = []
-                        
+
                         for req in requests {
                             let passengerId = req.passengerId ?? UUID().uuidString
                             if req.session == "Morning" || req.session == "Both" {
-                                mPass.append(SimulationEnrolledPassenger(id: passengerId, fullName: req.passengerName, assignedStopName: req.pickupStop, attendanceStatusLabel: "Not marked"))
+                                mPass.append(SimulationEnrolledPassenger(
+                                    id: passengerId,
+                                    fullName: req.passengerName,
+                                    assignedStopName: req.pickupStop,
+                                    attendanceStatusLabel: "Not marked"
+                                ))
                             }
                             if req.session == "Evening" || req.session == "Both" {
-                                ePass.append(SimulationEnrolledPassenger(id: passengerId, fullName: req.passengerName, assignedStopName: req.dropoffStop, attendanceStatusLabel: "Not marked"))
+                                ePass.append(SimulationEnrolledPassenger(
+                                    id: passengerId,
+                                    fullName: req.passengerName,
+                                    assignedStopName: req.dropoffStop,
+                                    attendanceStatusLabel: "Not marked"
+                                ))
                             }
                         }
                         self.morningEnrolledPassengers = mPass
@@ -316,43 +311,39 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
 
                     let timeFormatter = DateFormatter()
                     timeFormatter.timeStyle = .short
-                    
+
                     if route.scheduleEntries.count > 0 {
-                        let morningStr = route.scheduleEntries[0]
-                        self.morningSessionScheduledStartTime = timeFormatter.string(from: morningStr.scheduledDepartureTime)
-                        if let arr = morningStr.scheduledArrivalTime {
-                            self.morningSessionEstimatedEndTime = timeFormatter.string(from: arr)
-                        } else {
-                            self.morningSessionEstimatedEndTime = "TBD"
-                        }
+                        let morningSchedule = route.scheduleEntries[0]
+                        self.morningSessionScheduledStartTime = timeFormatter.string(from: morningSchedule.scheduledDepartureTime)
+                        self.morningSessionEstimatedEndTime = morningSchedule.scheduledArrivalTime.map {
+                            timeFormatter.string(from: $0)
+                        } ?? "TBD"
                     } else {
                         self.morningSessionScheduledStartTime = "N/A"
                         self.morningSessionEstimatedEndTime = "N/A"
                     }
+
                     if route.scheduleEntries.count > 1 {
-                        let eveningStr = route.scheduleEntries[1]
-                        self.eveningSessionScheduledStartTime = timeFormatter.string(from: eveningStr.scheduledDepartureTime)
-                        if let arr = eveningStr.scheduledArrivalTime {
-                            self.eveningSessionEstimatedEndTime = timeFormatter.string(from: arr)
-                        } else {
-                            self.eveningSessionEstimatedEndTime = "TBD"
-                        }
+                        let eveningSchedule = route.scheduleEntries[1]
+                        self.eveningSessionScheduledStartTime = timeFormatter.string(from: eveningSchedule.scheduledDepartureTime)
+                        self.eveningSessionEstimatedEndTime = eveningSchedule.scheduledArrivalTime.map {
+                            timeFormatter.string(from: $0)
+                        } ?? "TBD"
                     } else {
                         self.eveningSessionScheduledStartTime = "N/A"
                         self.eveningSessionEstimatedEndTime = "N/A"
                     }
-                    
-                    // Start listeners after fetching route and joinRequests
+
                     self.startAttendanceListeners(routeId: routeId)
-                    
+
                 } catch {
-                    print(" [DriverDashboardVM] Error fetching route for dashboard: \(error)")
+                    print(" [DriverDashboardVM] Error fetching route: \(error)")
                     self.morningSessionScheduledStartTime = "Unavailable"
                     self.morningSessionEstimatedEndTime = "Unavailable"
                     self.eveningSessionScheduledStartTime = "Unavailable"
                     self.eveningSessionEstimatedEndTime = "Unavailable"
                 }
-                
+
                 self.isLoadingData = false
             } catch {
                 self.driverFullName = "Unknown Driver"
@@ -361,35 +352,116 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
         }
     }
 
+    // Attaches both morning and evening listeners using the correct date for each session.
+    // Morning always uses today. Evening uses today before 12:00, or today if between 12:00–23:59
+    // so the driver sees today's evening attendance as soon as passengers start marking it.
+    // The key rule: each session listener is scoped to the date on which that session will actually run.
     private func startAttendanceListeners(routeId: String) {
-        let date = AttendanceService.relevantDate()
-        
+        let morningDate = attendanceDateForSession(.morning)
+        let eveningDate = attendanceDateForSession(.evening)
+
         _morningAttendanceListener?.remove()
-        _morningAttendanceListener = AttendanceService.shared.listenForRouteAttendance(routeId: routeId, session: "Morning", date: date) { [weak self] records in
-            guard let self = self else { return }
-            Task { @MainActor in
-                self.processAttendance(records: records, session: .morning)
-            }
+        _morningAttendanceListener = AttendanceService.shared.listenForRouteAttendance(
+            routeId: routeId,
+            session: "Morning",
+            date: morningDate
+        ) { [weak self] records in
+            guard let self else { return }
+            Task { @MainActor in self.processAttendance(records: records, session: .morning) }
         }
-        
+
         _eveningAttendanceListener?.remove()
-        _eveningAttendanceListener = AttendanceService.shared.listenForRouteAttendance(routeId: routeId, session: "Evening", date: date) { [weak self] records in
-            guard let self = self else { return }
-            Task { @MainActor in
-                self.processAttendance(records: records, session: .evening)
+        _eveningAttendanceListener = AttendanceService.shared.listenForRouteAttendance(
+            routeId: routeId,
+            session: "Evening",
+            date: eveningDate
+        ) { [weak self] records in
+            guard let self else { return }
+            Task { @MainActor in self.processAttendance(records: records, session: .evening) }
+        }
+
+        print("[DriverDashboardVM] Listeners attached — morning date: \(morningDate), evening date: \(eveningDate)")
+    }
+
+    // Re-attaches only the listener for the given session with a freshly computed date.
+    // Called whenever the driver taps the session segment control.
+    private func reattachListenerForSession(_ session: SessionType) {
+        guard !currentRouteId.isEmpty else { return }
+        let targetDate = attendanceDateForSession(session)
+        let sessionLabel = session == .morning ? "Morning" : "Evening"
+
+        // Reset the attendance display for this session so stale data is not shown
+        // while the new listener fetches the correct day's records
+        if session == .morning {
+            morningAttendanceStops = []
+            for i in morningEnrolledPassengers.indices {
+                let existing = morningEnrolledPassengers[i]
+                morningEnrolledPassengers[i] = SimulationEnrolledPassenger(
+                    id: existing.id,
+                    fullName: existing.fullName,
+                    assignedStopName: existing.assignedStopName,
+                    attendanceStatusLabel: "Not marked"
+                )
+            }
+        } else {
+            eveningAttendanceStops = []
+            for i in eveningEnrolledPassengers.indices {
+                let existing = eveningEnrolledPassengers[i]
+                eveningEnrolledPassengers[i] = SimulationEnrolledPassenger(
+                    id: existing.id,
+                    fullName: existing.fullName,
+                    assignedStopName: existing.assignedStopName,
+                    attendanceStatusLabel: "Not marked"
+                )
             }
         }
+
+        if session == .morning {
+            _morningAttendanceListener?.remove()
+            _morningAttendanceListener = AttendanceService.shared.listenForRouteAttendance(
+                routeId: currentRouteId,
+                session: sessionLabel,
+                date: targetDate
+            ) { [weak self] records in
+                guard let self else { return }
+                Task { @MainActor in self.processAttendance(records: records, session: .morning) }
+            }
+        } else {
+            _eveningAttendanceListener?.remove()
+            _eveningAttendanceListener = AttendanceService.shared.listenForRouteAttendance(
+                routeId: currentRouteId,
+                session: sessionLabel,
+                date: targetDate
+            ) { [weak self] records in
+                guard let self else { return }
+                Task { @MainActor in self.processAttendance(records: records, session: .evening) }
+            }
+        }
+
+        print("[DriverDashboardVM] Re-attached \(sessionLabel) listener for date: \(targetDate)")
+    }
+
+    // Determines which calendar date to use for each session's attendance listener.
+    //
+    // Morning: always today. Passengers mark morning attendance for the current day.
+    // Evening: today until the evening session is complete (i.e. the whole day). Once it
+    //          is after 18:00 and the evening trip is done, passengers begin marking
+    //          attendance for tomorrow's evening — but the driver dashboard only needs to
+    //          show today's confirmed attendees during their operating hours, so we use
+    //          today for the full day. The passenger app handles the "next day" logic
+    //          separately via AttendanceService.relevantDate().
+    //
+    // The practical effect: the driver always sees attendance for the session that is
+    // scheduled to run today, never attendance from a different calendar date.
+    private func attendanceDateForSession(_ session: SessionType) -> Date {
+        return Calendar.current.startOfDay(for: Date())
     }
 
     private func processAttendance(records: [AttendanceModel], session: SessionType) {
-        
-        // Statuses that should be counted
         let validStatuses: Set<String> = ["attending", "not_sure"]
 
         let countedPassengerIds = Set(
-            records
-                .filter { validStatuses.contains($0.status) }
-                .map { $0.passengerId }
+            records.filter { validStatuses.contains($0.status) }.map { $0.passengerId }
         )
 
         let allRecordsDict = Dictionary(
@@ -399,31 +471,17 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
         var stopCounts: [String: Int] = [:]
 
         if session == .morning {
-
             for i in 0..<morningEnrolledPassengers.count {
-
                 let pId = morningEnrolledPassengers[i].id
-
                 if let status = allRecordsDict[pId] {
-
                     let newLabel: String
-
                     switch status {
-                    case "attending":
-                        newLabel = "Attending"
-
-                    case "not_sure":
-                        newLabel = "Not Sure"
-
-                    case "absent":
-                        newLabel = "Not coming"
-
-                    default:
-                        newLabel = "Not marked"
+                    case "attending": newLabel = "Attending"
+                    case "not_sure":  newLabel = "Not Sure"
+                    case "absent":    newLabel = "Not coming"
+                    default:          newLabel = "Not marked"
                     }
-
                     let existing = morningEnrolledPassengers[i]
-
                     morningEnrolledPassengers[i] = SimulationEnrolledPassenger(
                         id: existing.id,
                         fullName: existing.fullName,
@@ -431,48 +489,26 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
                         attendanceStatusLabel: newLabel
                     )
                 }
-
-                // Count attending + not_sure
                 if countedPassengerIds.contains(pId) {
                     stopCounts[morningEnrolledPassengers[i].assignedStopName, default: 0] += 1
                 }
             }
-
             self.morningAttendanceStops = stopCounts
-                .map {
-                    AttendanceStopInfo(
-                        stopName: $0.key,
-                        confirmedPassengerCount: $0.value
-                    )
-                }
+                .map { AttendanceStopInfo(stopName: $0.key, confirmedPassengerCount: $0.value) }
                 .sorted { $0.stopName < $1.stopName }
 
         } else {
-
             for i in 0..<eveningEnrolledPassengers.count {
-
                 let pId = eveningEnrolledPassengers[i].id
-
                 if let status = allRecordsDict[pId] {
-
                     let newLabel: String
-
                     switch status {
-                    case "attending":
-                        newLabel = "Attending"
-
-                    case "not_sure":
-                        newLabel = "Not Sure"
-
-                    case "absent":
-                        newLabel = "Not coming"
-
-                    default:
-                        newLabel = "Not marked"
+                    case "attending": newLabel = "Attending"
+                    case "not_sure":  newLabel = "Not Sure"
+                    case "absent":    newLabel = "Not coming"
+                    default:          newLabel = "Not marked"
                     }
-
                     let existing = eveningEnrolledPassengers[i]
-
                     eveningEnrolledPassengers[i] = SimulationEnrolledPassenger(
                         id: existing.id,
                         fullName: existing.fullName,
@@ -480,21 +516,13 @@ final class DriverDashboardViewModel: NSObject, ObservableObject, CLLocationMana
                         attendanceStatusLabel: newLabel
                     )
                 }
-
-                // Count attending + not_sure
                 if countedPassengerIds.contains(pId) {
                     stopCounts[eveningEnrolledPassengers[i].assignedStopName, default: 0] += 1
                 }
             }
-
             self.eveningAttendanceStops = stopCounts
-                .map {
-                    AttendanceStopInfo(
-                        stopName: $0.key,
-                        confirmedPassengerCount: $0.value
-                    )
-                }
+                .map { AttendanceStopInfo(stopName: $0.key, confirmedPassengerCount: $0.value) }
                 .sorted { $0.stopName < $1.stopName }
         }
-    }}
-
+    }
+}
